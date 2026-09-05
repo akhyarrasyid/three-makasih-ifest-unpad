@@ -1,0 +1,649 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "RIV-MAINSTEM",
+      "properties": {
+        "id": "RIV-MAINSTEM",
+        "name": "Kali Bengawan Solo",
+        "type": "mainstem",
+        "stream_order": 5,
+        "length_km": 548.2,
+        "primary_reach": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            110.931,
+            -7.832
+          ],
+          [
+            110.92,
+            -7.81
+          ],
+          [
+            110.905,
+            -7.78
+          ],
+          [
+            110.89,
+            -7.75
+          ],
+          [
+            110.879,
+            -7.722
+          ],
+          [
+            110.865,
+            -7.71
+          ],
+          [
+            110.851,
+            -7.699
+          ],
+          [
+            110.845,
+            -7.66
+          ],
+          [
+            110.85,
+            -7.62
+          ],
+          [
+            110.855,
+            -7.59
+          ],
+          [
+            110.858,
+            -7.566
+          ],
+          [
+            110.88,
+            -7.53
+          ],
+          [
+            110.92,
+            -7.495
+          ],
+          [
+            110.97,
+            -7.46
+          ],
+          [
+            111.021,
+            -7.428
+          ],
+          [
+            111.08,
+            -7.405
+          ],
+          [
+            111.14,
+            -7.39
+          ],
+          [
+            111.2,
+            -7.385
+          ],
+          [
+            111.252,
+            -7.382
+          ],
+          [
+            111.31,
+            -7.385
+          ],
+          [
+            111.37,
+            -7.395
+          ],
+          [
+            111.41,
+            -7.4
+          ],
+          [
+            111.447,
+            -7.402
+          ],
+          [
+            111.47,
+            -7.36
+          ],
+          [
+            111.5,
+            -7.31
+          ],
+          [
+            111.53,
+            -7.26
+          ],
+          [
+            111.56,
+            -7.21
+          ],
+          [
+            111.592,
+            -7.152
+          ],
+          [
+            111.64,
+            -7.17
+          ],
+          [
+            111.702,
+            -7.201
+          ],
+          [
+            111.75,
+            -7.185
+          ],
+          [
+            111.81,
+            -7.165
+          ],
+          [
+            111.882,
+            -7.151
+          ],
+          [
+            111.95,
+            -7.14
+          ],
+          [
+            112.02,
+            -7.135
+          ],
+          [
+            112.09,
+            -7.125
+          ],
+          [
+            112.162,
+            -7.112
+          ],
+          [
+            112.21,
+            -7.08
+          ],
+          [
+            112.25,
+            -7.05
+          ],
+          [
+            112.302,
+            -7.021
+          ],
+          [
+            112.36,
+            -7.005
+          ],
+          [
+            112.43,
+            -6.995
+          ],
+          [
+            112.518,
+            -6.982
+          ],
+          [
+            112.535,
+            -6.95
+          ],
+          [
+            112.545,
+            -6.915
+          ],
+          [
+            112.552,
+            -6.884
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "RIV-MADIUN",
+      "properties": {
+        "id": "RIV-MADIUN",
+        "name": "Kali Madiun",
+        "type": "tributary",
+        "stream_order": 4,
+        "length_km": 112.4,
+        "primary_reach": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            111.383,
+            -7.869
+          ],
+          [
+            111.41,
+            -7.87
+          ],
+          [
+            111.44,
+            -7.872
+          ],
+          [
+            111.468,
+            -7.867
+          ],
+          [
+            111.48,
+            -7.82
+          ],
+          [
+            111.495,
+            -7.76
+          ],
+          [
+            111.51,
+            -7.7
+          ],
+          [
+            111.523,
+            -7.628
+          ],
+          [
+            111.51,
+            -7.575
+          ],
+          [
+            111.482,
+            -7.521
+          ],
+          [
+            111.465,
+            -7.46
+          ],
+          [
+            111.447,
+            -7.402
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "RIV-DENGKENG",
+      "properties": {
+        "id": "RIV-DENGKENG",
+        "name": "Kali Dengkeng",
+        "type": "tributary",
+        "stream_order": 3,
+        "length_km": 42,
+        "primary_reach": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            110.58,
+            -7.74
+          ],
+          [
+            110.65,
+            -7.71
+          ],
+          [
+            110.722,
+            -7.681
+          ],
+          [
+            110.78,
+            -7.64
+          ],
+          [
+            110.82,
+            -7.6
+          ],
+          [
+            110.858,
+            -7.566
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "RIV-PEPE",
+      "properties": {
+        "id": "RIV-PEPE",
+        "name": "Kali Pepe",
+        "type": "tributary",
+        "stream_order": 3,
+        "length_km": 36.5,
+        "primary_reach": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            110.6,
+            -7.52
+          ],
+          [
+            110.68,
+            -7.535
+          ],
+          [
+            110.76,
+            -7.545
+          ],
+          [
+            110.831,
+            -7.552
+          ],
+          [
+            110.858,
+            -7.566
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "RIV-SAMIN",
+      "properties": {
+        "id": "RIV-SAMIN",
+        "name": "Kali Samin",
+        "type": "tributary",
+        "stream_order": 2,
+        "length_km": 28,
+        "primary_reach": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            111.12,
+            -7.64
+          ],
+          [
+            111.05,
+            -7.63
+          ],
+          [
+            110.951,
+            -7.621
+          ],
+          [
+            110.89,
+            -7.59
+          ],
+          [
+            110.858,
+            -7.566
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "RIV-KEDUANG",
+      "properties": {
+        "id": "RIV-KEDUANG",
+        "name": "Kali Keduang",
+        "type": "tributary",
+        "stream_order": 3,
+        "length_km": 38.5,
+        "primary_reach": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            111.18,
+            -7.76
+          ],
+          [
+            111.12,
+            -7.78
+          ],
+          [
+            111.05,
+            -7.795
+          ],
+          [
+            111.004,
+            -7.802
+          ],
+          [
+            110.95,
+            -7.82
+          ],
+          [
+            110.931,
+            -7.832
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "RIV-TIRTOMOYO",
+      "properties": {
+        "id": "RIV-TIRTOMOYO",
+        "name": "Kali Tirtomoyo",
+        "type": "tributary",
+        "stream_order": 2,
+        "length_km": 31,
+        "primary_reach": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            111.15,
+            -8.02
+          ],
+          [
+            111.1,
+            -7.98
+          ],
+          [
+            111.052,
+            -7.931
+          ],
+          [
+            110.99,
+            -7.88
+          ],
+          [
+            110.931,
+            -7.832
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "RIV-GANDONG",
+      "properties": {
+        "id": "RIV-GANDONG",
+        "name": "Kali Gandong",
+        "type": "tributary",
+        "stream_order": 2,
+        "length_km": 24.5,
+        "primary_reach": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            111.25,
+            -7.64
+          ],
+          [
+            111.32,
+            -7.62
+          ],
+          [
+            111.398,
+            -7.602
+          ],
+          [
+            111.44,
+            -7.56
+          ],
+          [
+            111.482,
+            -7.521
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "RIV-KENING",
+      "properties": {
+        "id": "RIV-KENING",
+        "name": "Kali Kening",
+        "type": "tributary",
+        "stream_order": 3,
+        "length_km": 46,
+        "primary_reach": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            111.75,
+            -6.85
+          ],
+          [
+            111.8,
+            -6.9
+          ],
+          [
+            111.852,
+            -6.952
+          ],
+          [
+            111.865,
+            -7.02
+          ],
+          [
+            111.875,
+            -7.085
+          ],
+          [
+            111.882,
+            -7.151
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "RIV-JERO",
+      "properties": {
+        "id": "RIV-JERO",
+        "name": "Bengawan Jero",
+        "type": "tributary",
+        "stream_order": 2,
+        "length_km": 29,
+        "primary_reach": false
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            112.45,
+            -7.12
+          ],
+          [
+            112.4,
+            -7.085
+          ],
+          [
+            112.352,
+            -7.052
+          ],
+          [
+            112.32,
+            -7.035
+          ],
+          [
+            112.302,
+            -7.021
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "RIV-LAMONG",
+      "properties": {
+        "id": "RIV-LAMONG",
+        "name": "Kali Lamong",
+        "type": "distributary",
+        "stream_order": 2,
+        "length_km": 52,
+        "primary_reach": false
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            112.2,
+            -7.28
+          ],
+          [
+            112.32,
+            -7.25
+          ],
+          [
+            112.44,
+            -7.225
+          ],
+          [
+            112.552,
+            -7.202
+          ],
+          [
+            112.65,
+            -7.185
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "RIV-GRINDULU",
+      "properties": {
+        "id": "RIV-GRINDULU",
+        "name": "Kali Grindulu",
+        "type": "basin_boundary_river",
+        "stream_order": 2,
+        "length_km": 36,
+        "primary_reach": false
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            111.25,
+            -8.05
+          ],
+          [
+            111.18,
+            -8.12
+          ],
+          [
+            111.102,
+            -8.191
+          ],
+          [
+            111.08,
+            -8.225
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "type": "FeatureCollection",
+  "name": "indonesia_archipelago",
+  "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "Sumatera", "region": "Western Indonesia" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[95.2, 5.6], [98.5, 3.8], [101.5, 1.2], [105.1, -2.5], [106.0, -5.9], [104.5, -5.5], [102.2, -3.8], [100.1, -1.0], [97.5, 1.8], [95.2, 5.6]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Jawa", "region": "Java" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[105.2, -6.7], [108.5, -6.4], [112.5, -6.9], [114.5, -7.7], [114.2, -8.7], [110.5, -8.1], [106.2, -7.0], [105.2, -6.7]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Kalimantan", "region": "Borneo" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[109.0, 1.5], [112.0, 1.0], [115.5, 4.0], [117.8, 2.5], [117.2, -1.2], [116.5, -3.8], [114.2, -3.5], [111.0, -3.0], [109.0, -1.0], [109.0, 1.5]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Sulawesi", "region": "Sulawesi" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[119.8, 1.2], [121.5, 1.0], [125.0, 1.5], [123.5, 0.2], [121.0, -2.5], [122.5, -5.0], [120.0, -5.5], [119.5, -3.5], [119.2, -0.5], [119.8, 1.2]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Papua", "region": "Eastern Indonesia" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[130.5, -1.5], [135.0, -2.5], [141.0, -2.6], [141.0, -9.1], [137.5, -5.0], [134.5, -4.0], [131.0, -2.8], [130.5, -1.5]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Bali & Nusa Tenggara", "region": "Lesser Sunda Islands" },
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [
+          [[[114.4, -8.2], [115.7, -8.1], [115.5, -8.8], [114.5, -8.7], [114.4, -8.2]]],
+          [[[115.8, -8.2], [116.8, -8.2], [116.6, -8.9], [115.9, -8.8], [115.8, -8.2]]],
+          [[[119.8, -8.5], [124.5, -8.3], [125.0, -9.2], [123.5, -10.3], [119.8, -8.5]]]
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,785 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "BS-001",
+      "properties": {
+        "id": "BS-001",
+        "name": "Wonogiri Dam",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "DAM_WEIR",
+        "river": "Bengawan Solo Hulu",
+        "elevation": 136,
+        "catchmentKm2": 1350,
+        "downstream": "BS-002",
+        "risk": "LOW",
+        "currentTma": 4.16,
+        "alertThreshold": 6.4,
+        "warningThreshold": 5.12
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.931,
+          -7.832
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-002",
+      "properties": {
+        "id": "BS-002",
+        "name": "Nguter",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "NATURAL",
+        "river": "Bengawan Solo Hulu",
+        "elevation": 112,
+        "catchmentKm2": 1610,
+        "downstream": "BS-003",
+        "risk": "LOW",
+        "currentTma": 3.6399999999999997,
+        "alertThreshold": 5.6,
+        "warningThreshold": 4.48
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.879,
+          -7.722
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-003",
+      "properties": {
+        "id": "BS-003",
+        "name": "Colo Weir",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "DAM_WEIR",
+        "river": "Bengawan Solo Hulu",
+        "elevation": 104,
+        "catchmentKm2": 1720,
+        "downstream": "BS-004",
+        "risk": "LOW",
+        "currentTma": 3.12,
+        "alertThreshold": 4.8,
+        "warningThreshold": 3.84
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.851,
+          -7.699
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-004",
+      "properties": {
+        "id": "BS-004",
+        "name": "Jurug",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "NATURAL",
+        "river": "Bengawan Solo",
+        "elevation": 88,
+        "catchmentKm2": 3210,
+        "downstream": "BS-007",
+        "risk": "HIGH",
+        "currentTma": 5.525,
+        "alertThreshold": 8.5,
+        "warningThreshold": 6.8
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.858,
+          -7.566
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-005",
+      "properties": {
+        "id": "BS-005",
+        "name": "Dengkeng",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "NATURAL",
+        "river": "Kali Dengkeng",
+        "elevation": 132,
+        "catchmentKm2": 760,
+        "downstream": "BS-004",
+        "risk": "LOW",
+        "currentTma": 2.7300000000000004,
+        "alertThreshold": 4.2,
+        "warningThreshold": 3.36
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.722,
+          -7.681
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-006",
+      "properties": {
+        "id": "BS-006",
+        "name": "Pepe Hilir",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "MIXED",
+        "river": "Kali Pepe",
+        "elevation": 92,
+        "catchmentKm2": 310,
+        "downstream": "BS-007",
+        "risk": "LOW",
+        "currentTma": 2.3400000000000003,
+        "alertThreshold": 3.6,
+        "warningThreshold": 2.88
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.831,
+          -7.552
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-007",
+      "properties": {
+        "id": "BS-007",
+        "name": "Sragen",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "NATURAL",
+        "river": "Bengawan Solo",
+        "elevation": 74,
+        "catchmentKm2": 4020,
+        "downstream": "BS-025",
+        "risk": "LOW",
+        "currentTma": 5.9799999999999995,
+        "alertThreshold": 9.2,
+        "warningThreshold": 7.36
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.021,
+          -7.428
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-008",
+      "properties": {
+        "id": "BS-008",
+        "name": "Badegan",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "NATURAL",
+        "river": "Kali Madiun Hulu",
+        "elevation": 214,
+        "catchmentKm2": 420,
+        "downstream": "BS-009",
+        "risk": "LOW",
+        "currentTma": 2.4699999999999998,
+        "alertThreshold": 3.8,
+        "warningThreshold": 3.04
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.383,
+          -7.869
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-009",
+      "properties": {
+        "id": "BS-009",
+        "name": "Ponorogo",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "NATURAL",
+        "river": "Kali Madiun",
+        "elevation": 152,
+        "catchmentKm2": 890,
+        "downstream": "BS-010",
+        "risk": "LOW",
+        "currentTma": 2.9899999999999998,
+        "alertThreshold": 4.6,
+        "warningThreshold": 3.68
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.468,
+          -7.867
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-010",
+      "properties": {
+        "id": "BS-010",
+        "name": "Madiun",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "MIXED",
+        "river": "Kali Madiun",
+        "elevation": 68,
+        "catchmentKm2": 2180,
+        "downstream": "BS-012",
+        "risk": "LOW",
+        "currentTma": 3.965,
+        "alertThreshold": 6.1,
+        "warningThreshold": 4.88
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.523,
+          -7.628
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-011",
+      "properties": {
+        "id": "BS-011",
+        "name": "Ngawi Confluence",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "NATURAL",
+        "river": "Bengawan Solo",
+        "elevation": 52,
+        "catchmentKm2": 8460,
+        "downstream": "BS-014",
+        "risk": "LOW",
+        "currentTma": 7.670000000000001,
+        "alertThreshold": 11.8,
+        "warningThreshold": 9.44
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.447,
+          -7.402
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-012",
+      "properties": {
+        "id": "BS-012",
+        "name": "Kwadungan",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "NATURAL",
+        "river": "Kali Madiun",
+        "elevation": 58,
+        "catchmentKm2": 3140,
+        "downstream": "BS-011",
+        "risk": "LOW",
+        "currentTma": 4.8100000000000005,
+        "alertThreshold": 7.4,
+        "warningThreshold": 5.92
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.482,
+          -7.521
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-013",
+      "properties": {
+        "id": "BS-013",
+        "name": "Gandong Weir",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "DAM_WEIR",
+        "river": "Kali Gandong",
+        "elevation": 96,
+        "catchmentKm2": 340,
+        "downstream": "BS-012",
+        "risk": "LOW",
+        "currentTma": 2.08,
+        "alertThreshold": 3.2,
+        "warningThreshold": 2.56
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.398,
+          -7.602
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-014",
+      "properties": {
+        "id": "BS-014",
+        "name": "Cepu",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "NATURAL",
+        "river": "Bengawan Solo",
+        "elevation": 34,
+        "catchmentKm2": 9820,
+        "downstream": "BS-024",
+        "risk": "MODERATE",
+        "currentTma": 8.19,
+        "alertThreshold": 12.6,
+        "warningThreshold": 10.08
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.592,
+          -7.152
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-015",
+      "properties": {
+        "id": "BS-015",
+        "name": "Bojonegoro Barrage",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "DAM_WEIR",
+        "river": "Bengawan Solo",
+        "elevation": 22,
+        "catchmentKm2": 11400,
+        "downstream": "BS-016",
+        "risk": "LOW",
+        "currentTma": 8.775,
+        "alertThreshold": 13.5,
+        "warningThreshold": 10.8
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.882,
+          -7.151
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-016",
+      "properties": {
+        "id": "BS-016",
+        "name": "Babat Barrage",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "DAM_WEIR",
+        "river": "Bengawan Solo Hilir",
+        "elevation": 14,
+        "catchmentKm2": 12300,
+        "downstream": "BS-017",
+        "risk": "LOW",
+        "currentTma": 5.135000000000001,
+        "alertThreshold": 7.9,
+        "warningThreshold": 6.32
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.162,
+          -7.112
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-017",
+      "properties": {
+        "id": "BS-017",
+        "name": "Karanggeneng",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "MIXED",
+        "river": "Bengawan Solo Hilir",
+        "elevation": 8,
+        "catchmentKm2": 13100,
+        "downstream": "BS-018",
+        "risk": "LOW",
+        "currentTma": 3.77,
+        "alertThreshold": 5.8,
+        "warningThreshold": 4.64
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.302,
+          -7.021
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-018",
+      "properties": {
+        "id": "BS-018",
+        "name": "Sembayat Barrage",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "DAM_WEIR",
+        "river": "Bengawan Solo Hilir",
+        "elevation": 4,
+        "catchmentKm2": 15600,
+        "downstream": "BS-019",
+        "risk": "LOW",
+        "currentTma": 2.8600000000000003,
+        "alertThreshold": 4.4,
+        "warningThreshold": 3.52
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.518,
+          -6.982
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-019",
+      "properties": {
+        "id": "BS-019",
+        "name": "Ujung Pangkah Estuary",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "NATURAL",
+        "river": "Bengawan Solo Hilir",
+        "elevation": 1,
+        "catchmentKm2": 16100,
+        "downstream": null,
+        "risk": "LOW",
+        "currentTma": 2.015,
+        "alertThreshold": 3.1,
+        "warningThreshold": 2.48
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.552,
+          -6.884
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-020",
+      "properties": {
+        "id": "BS-020",
+        "name": "Samin",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "NATURAL",
+        "river": "Kali Samin",
+        "elevation": 118,
+        "catchmentKm2": 280,
+        "downstream": "BS-004",
+        "risk": "LOW",
+        "currentTma": 2.21,
+        "alertThreshold": 3.4,
+        "warningThreshold": 2.72
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.951,
+          -7.621
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-021",
+      "properties": {
+        "id": "BS-021",
+        "name": "Keduang",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "NATURAL",
+        "river": "Kali Keduang",
+        "elevation": 168,
+        "catchmentKm2": 420,
+        "downstream": "BS-001",
+        "risk": "LOW",
+        "currentTma": 2.535,
+        "alertThreshold": 3.9,
+        "warningThreshold": 3.12
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.004,
+          -7.802
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-022",
+      "properties": {
+        "id": "BS-022",
+        "name": "Tirtomoyo",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "NATURAL",
+        "river": "Kali Tirtomoyo",
+        "elevation": 186,
+        "catchmentKm2": 230,
+        "downstream": "BS-001",
+        "risk": "LOW",
+        "currentTma": 2.275,
+        "alertThreshold": 3.5,
+        "warningThreshold": 2.8
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.052,
+          -7.931
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-023",
+      "properties": {
+        "id": "BS-023",
+        "name": "Kening",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "NATURAL",
+        "river": "Kali Kening",
+        "elevation": 28,
+        "catchmentKm2": 510,
+        "downstream": "BS-015",
+        "risk": "LOW",
+        "currentTma": 2.665,
+        "alertThreshold": 4.1,
+        "warningThreshold": 3.28
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.852,
+          -6.952
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-024",
+      "properties": {
+        "id": "BS-024",
+        "name": "Padangan",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "MIXED",
+        "river": "Bengawan Solo",
+        "elevation": 28,
+        "catchmentKm2": 10600,
+        "downstream": "BS-015",
+        "risk": "LOW",
+        "currentTma": 8.385,
+        "alertThreshold": 12.9,
+        "warningThreshold": 10.32
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.702,
+          -7.201
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-025",
+      "properties": {
+        "id": "BS-025",
+        "name": "Widodaren",
+        "networkRole": "primary",
+        "primary": true,
+        "category": "NATURAL",
+        "river": "Bengawan Solo",
+        "elevation": 62,
+        "catchmentKm2": 4680,
+        "downstream": "BS-011",
+        "risk": "LOW",
+        "currentTma": 6.370000000000001,
+        "alertThreshold": 9.8,
+        "warningThreshold": 7.84
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.252,
+          -7.382
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-026",
+      "properties": {
+        "id": "BS-026",
+        "name": "Grindulu",
+        "networkRole": "secondary",
+        "primary": false,
+        "category": "NATURAL",
+        "river": "Kali Grindulu",
+        "elevation": 42,
+        "catchmentKm2": 620,
+        "downstream": null,
+        "risk": "LOW",
+        "currentTma": 2.795,
+        "alertThreshold": 4.3,
+        "warningThreshold": 3.44
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.102,
+          -8.191
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-027",
+      "properties": {
+        "id": "BS-027",
+        "name": "Lorog",
+        "networkRole": "secondary",
+        "primary": false,
+        "category": "NATURAL",
+        "river": "Kali Lorog",
+        "elevation": 36,
+        "catchmentKm2": 290,
+        "downstream": null,
+        "risk": "LOW",
+        "currentTma": 2.4050000000000002,
+        "alertThreshold": 3.7,
+        "warningThreshold": 2.96
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.252,
+          -8.202
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-028",
+      "properties": {
+        "id": "BS-028",
+        "name": "Lamong Hilir",
+        "networkRole": "secondary",
+        "primary": false,
+        "category": "MIXED",
+        "river": "Kali Lamong",
+        "elevation": 6,
+        "catchmentKm2": 720,
+        "downstream": null,
+        "risk": "LOW",
+        "currentTma": 2.145,
+        "alertThreshold": 3.3,
+        "warningThreshold": 2.64
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.552,
+          -7.202
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-029",
+      "properties": {
+        "id": "BS-029",
+        "name": "Serang Hulu",
+        "networkRole": "secondary",
+        "primary": false,
+        "category": "NATURAL",
+        "river": "Kali Serang",
+        "elevation": 96,
+        "catchmentKm2": 480,
+        "downstream": null,
+        "risk": "LOW",
+        "currentTma": 2.6,
+        "alertThreshold": 4,
+        "warningThreshold": 3.2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.852,
+          -7.252
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "BS-030",
+      "properties": {
+        "id": "BS-030",
+        "name": "Bengawan Jero",
+        "networkRole": "secondary",
+        "primary": false,
+        "category": "NATURAL",
+        "river": "Bengawan Jero",
+        "elevation": 3,
+        "catchmentKm2": 380,
+        "downstream": null,
+        "risk": "LOW",
+        "currentTma": 1.885,
+        "alertThreshold": 2.9,
+        "warningThreshold": 2.32
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.352,
+          -7.052
+        ]
+      }
+    }
+  ]
+}
