@@ -137,7 +137,7 @@ export const TimeSeriesChart = memo(function TimeSeriesChart({ data, thresholds,
           {showRainfall && <Bar yAxisId="rain" dataKey="rainfall" name="Rainfall (mm/h)" fill={CHART_COLORS.rainfall} fillOpacity={0.55} barSize={3} isAnimationActive={false} />}
           {showBand && <Area yAxisId="tma" dataKey="band" name="90% interval" stroke="none" fill="url(#bandFill)" isAnimationActive={false} connectNulls={false} legendType="none" tooltipType="none" />}
           {showClimatology && <Line yAxisId="tma" dataKey="climatology" name="Climatology" stroke={CHART_COLORS.climatology} strokeWidth={1} strokeDasharray="2 4" dot={false} isAnimationActive={false} connectNulls />}
-          <Area yAxisId="tma" dataKey="actual" name="Observed TMA" stroke={CHART_COLORS.actual} strokeWidth={1.6} fill="url(#actualFill)" dot={false} isAnimationActive={false} connectNulls={false} activeDot={{ r: 3 }} />
+          <Area yAxisId="tma" dataKey="actual" name="Observed Supply" stroke={CHART_COLORS.actual} strokeWidth={1.6} fill="url(#actualFill)" dot={false} isAnimationActive={false} connectNulls={false} activeDot={{ r: 3 }} />
           <Line yAxisId="tma" dataKey="forecast" name="Model forecast" stroke={CHART_COLORS.forecast} strokeWidth={1.6} strokeDasharray="5 3" dot={false} isAnimationActive={false} connectNulls activeDot={{ r: 3 }} />
           {compareLabel && <Line yAxisId="tma" dataKey="compare" name={compareLabel} stroke={CHART_COLORS.compare} strokeWidth={1.3} dot={false} isAnimationActive={false} connectNulls />}
           <Legend wrapperStyle={{ fontSize: 11, color: CHART_COLORS.text, paddingTop: 6 }} iconSize={8} iconType="plainline" />
@@ -180,6 +180,8 @@ export const HBarChart = memo(function HBarChart({ data, height = 220, unit = ""
     </div>
   );
 });
+
+export const MetricBarChart = HBarChart;
 
 /* ------------------------------------------------------------------ */
 /* Simple line chart for generic metrics                               */

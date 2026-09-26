@@ -4,8 +4,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { Drawer } from "@/components/ui/primitives";
 import { useUiStore } from "@/store/ui-store";
 import { useSelectionStore } from "@/store/selection-store";
-import { MODEL } from "@/config/constants";
-import { ArrowRight, ChevronDown, ChevronUp, CornerDownLeft, FileText, Sparkles, X } from "lucide-react";
+import { MODEL, SCORES } from "@/config/constants";
+import { ArrowRight, ChevronDown, ChevronUp, CornerDownLeft, FileText, Sparkles, X, Droplets } from "lucide-react";
 import type { AssistantAction, AssistantCitation, AssistantResponse } from "@/server/rag/pipeline";
 
 interface ChatMessage {
@@ -20,51 +20,55 @@ interface ChatMessage {
 
 const ROUTE_SUGGESTIONS: Record<string, string[]> = {
   "/overview": [
-    "Station mana yang sedang warning?",
-    "Berapa RMSE model production?",
-    "Kenapa model menggunakan direct multi-horizon?",
-    "Apa pengaruh spatial reconciliation?",
-  ],
-  "/stations": [
-    "Kenapa stasiun ini diprediksi naik?",
-    "Apa perbedaan station natural dan dam/weir?",
-    "Berapa ambang batas waspada di stasiun ini?",
-    "Bagaimana korelasi stasiun hulu terhadap hilir?",
-  ],
-  "/forecasts": [
-    "Kenapa model menggunakan direct multi-horizon?",
-    "Bagaimana perhitungan interval confidence 90%?",
-    "Apa stasiun yang mengalami tren kenaikan?",
-  ],
-  "/models": [
-    "Berapa RMSE model production?",
-    "Bandingkan hasil ablation study",
-    "Apa perbedaan holdout RMSE dengan public leaderboard?",
-    "Apa pengaruh spatial reconciliation?",
+    "Sub-basin mana yang saat ini memiliki risiko water-stress tertinggi?",
+    "Berapa skor Public Leaderboard vs Stress-Test Validation?",
+    "Bagaimana defisit air merambat dari hulu ke hilir?",
+    "Apa arti Cold-Start Spatial Generalization?",
   ],
   "/network": [
-    "Bagaimana perambatan residual dari hulu ke hilir?",
-    "Berapa jumlah stasiun natural dan dam/weir?",
-    "Apa fungsi Bendung Babat dan Bendung Sembayat?",
+    "Bagaimana perambatan 1-hop, 2-hop, dan 3-hop dihitung?",
+    "Jelaskan relasi fisik id -> to_id pada river DAG",
+    "Mengapa graf sungai tidak dimodelkan sebagai jaringan acak?",
   ],
-  "/data-quality": [
-    "Berapa jumlah data missing pada dataset?",
-    "Bagaimana kriteria pemfilteran outlier 4σ?",
-    "Apa saja detektor anomali sensor otomatis?",
+  "/forecasts": [
+    "Bagaimana prediksi next-month water stress diformulasikan?",
+    "Apa faktor penyebab utama kenaikan risiko di HUC-DEMO-0014?",
+    "Bagaimana interpretasi risk tier (LOW/MODERATE/HIGH/CRITICAL)?",
+  ],
+  "/validation": [
+    "Kenapa Naive Random CV menghasilkan skor optimis palsu (0.8421)?",
+    "Jelaskan 4 safeguard pada Stress-Test Validation",
+    "Bagaimana temporal lineage reconstruction memecahkan 168 origin?",
+  ],
+  "/models": [
+    "Bandingkan performa Tabular Baseline, CatBoost, dan Directed GNN",
+    "Kenapa skor GNN 0.7641 diberi label Internal Research Evaluation?",
+    "Apa bobot optimal ensemble GBDT (CatBoost, LightGBM, XGBoost)?",
+  ],
+  "/features": [
+    "Mengapa Climatology Anomaly menjadi fitur terkuat (+4.82% AP)?",
+    "Apa perbedaan Water Availability Proxy dengan Official SUI?",
+    "Jelaskan 6 keluarga fitur dalam TIRTA",
   ],
   "/alerts": [
-    "Jelaskan tingkatan severity alert di ANCHOR",
-    "Apa tindakan operator saat alert CRITICAL muncul?",
-    "Kenapa ALR-1412 di Karanggeneng berstatus open?",
+    "Jelaskan 10 tipe alert water-stress di TIRTA",
+    "Apa tindakan operator saat UPSTREAM_STRESS_PROPAGATION aktif?",
+    "Bagaimana kaitan alert dengan inference trace?",
   ],
 };
 
 const DEFAULT_SUGGESTIONS = [
-  "Berapa RMSE model production?",
-  "Kenapa model menggunakan direct multi-horizon?",
-  "Apa pengaruh spatial reconciliation?",
-  "Station mana yang sedang warning?",
+  "Berapa skor Public Leaderboard vs Stress-Test Validation?",
+  "Kenapa Naive Random CV gagal dan digantikan Stress-Test Validation?",
+  "Jelaskan peran Directed Multi-Hop Reachability",
+  "Apa perbedaan model CatBoost dengan Directed Reachability GNN?",
 ];
+
+let messageCounter = 0;
+function createMsgId(prefix: string) {
+  messageCounter++;
+  return `${prefix}-${messageCounter}`;
+}
 
 export function AssistantDrawer() {
   const pathname = usePathname();
@@ -81,8 +85,8 @@ export function AssistantDrawer() {
       id: "welcome-1",
       role: "assistant",
       content:
-        "Halo, saya ANCHOR Intelligence Assistant. Saya dapat menjawab pertanyaan seputar prediksi TMA, model hidrologi Bengawan Solo, stasiun pantau, kualitas sensor, dan sistem peringatan dini.",
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        "Halo, saya TIRTA Intelligence Assistant. Saya dapat menjawab pertanyaan seputar prediksi next-month water stress, graf terarah sungai HUC12, validasi stress-test, dan metodologi IFEST DAC 2026.",
+      timestamp: "09:00",
     },
   ]);
   const [expandedSources, setExpandedSources] = useState<Record<string, boolean>>({});
@@ -90,14 +94,12 @@ export function AssistantDrawer() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus input when opened
   useEffect(() => {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 80);
     }
   }, [open]);
 
-  // Scroll to bottom on message update
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -110,20 +112,20 @@ export function AssistantDrawer() {
     const query = (textToSend ?? input).trim();
     if (!query || loading) return;
 
-    const userMsgId = `u-${Date.now()}`;
+    const userMsgId = createMsgId("usr");
     const userMsg: ChatMessage = {
       id: userMsgId,
       role: "user",
       content: query,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      timestamp: "Now",
     };
 
-    const thinkingId = `ast-${Date.now()}`;
+    const thinkingId = createMsgId("ast");
     const thinkingMsg: ChatMessage = {
       id: thinkingId,
       role: "assistant",
-      content: "Menganalisis domain hidrologi & dokumen ANCHOR…",
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      content: "Menganalisis metodologi TIRTA & dokumen hidrologi IFEST DAC 2026…",
+      timestamp: "Now",
       isThinking: true,
     };
 
@@ -140,38 +142,41 @@ export function AssistantDrawer() {
           context: {
             route: pathname,
             station_id: selectedStation,
-            model_version: MODEL.productionVersion,
+            basin_id: selectedStation,
+            model_version: MODEL.championVersion,
           },
         }),
       });
 
-      const json = await res.json();
-      const data: AssistantResponse = json.data;
+      const data: AssistantResponse = await res.json();
 
       setMessages((prev) =>
-        prev.map((m) =>
-          m.id === thinkingId
+        prev.map((msg) =>
+          msg.id === thinkingId
             ? {
-                ...m,
+                id: thinkingId,
+                role: "assistant",
                 content: data.answer,
+                timestamp: "Now",
                 citations: data.citations,
                 actions: data.actions,
                 isThinking: false,
               }
-            : m
+            : msg
         )
       );
     } catch {
       setMessages((prev) =>
-        prev.map((m) =>
-          m.id === thinkingId
+        prev.map((msg) =>
+          msg.id === thinkingId
             ? {
-                ...m,
-                content:
-                  "Terjadi kesalahan saat memproses pertanyaan. Pastikan sistem inference berjalan atau coba lagi beberapa saat.",
+                id: thinkingId,
+                role: "assistant",
+                content: "Maaf, terjadi kendala saat memproses kueri intelijen hidrologi.",
+                timestamp: "Now",
                 isThinking: false,
               }
-            : m
+            : msg
         )
       );
     } finally {
@@ -179,127 +184,110 @@ export function AssistantDrawer() {
     }
   };
 
-  const toggleSource = (msgId: string) => {
-    setExpandedSources((prev) => ({ ...prev, [msgId]: !prev[msgId] }));
-  };
-
-  const handleAction = (action: AssistantAction) => {
-    if (action.stationId) {
-      selectStation(action.stationId);
-    }
-    if (action.href) {
-      router.push(action.href);
-    }
-  };
-
   return (
-    <Drawer
-      open={open}
-      onClose={() => setOpen(false)}
-      title="ANCHOR Intelligence"
-      subtitle={`Hydrological RAG · ${MODEL.productionVersion}`}
-      width="w-full max-w-lg"
-    >
-      <div className="flex flex-col h-[calc(100vh-6.5rem)] -m-4">
-        {/* Messages scroll area */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map((m) => (
-            <div
-              key={m.id}
-              className={`flex flex-col ${
-                m.role === "user" ? "items-end" : "items-start"
-              }`}
-            >
-              <div className="flex items-center gap-2 mb-1 px-1">
-                <span className="text-[10px] font-mono uppercase text-fg-subtle">
-                  {m.role === "user" ? "You" : "ANCHOR RAG"}
-                </span>
-                <span className="text-[10px] font-mono text-fg-faint">{m.timestamp}</span>
-              </div>
-
-              <div
-                className={`text-xs leading-relaxed max-w-[95%] rounded-md p-3.5 ${
-                  m.role === "user"
-                    ? "bg-surface-3 text-fg border border-border-strong font-medium"
-                    : "bg-surface-1 text-fg border border-border"
-                } ${m.isThinking ? "animate-pulse text-fg-muted font-mono" : ""}`}
-              >
-                <div className="whitespace-pre-wrap">{m.content}</div>
-
-                {/* Grounded Citations & Sources */}
-                {m.citations && m.citations.length > 0 && (
-                  <div className="mt-3 pt-2.5 border-t border-border-subtle">
-                    <button
-                      onClick={() => toggleSource(m.id)}
-                      className="flex items-center gap-1 text-[11px] font-mono text-water hover:underline"
-                    >
-                      <FileText className="h-3 w-3" />
-                      <span>{m.citations.length} Verified Sources</span>
-                      {expandedSources[m.id] ? (
-                        <ChevronUp className="h-3 w-3" />
-                      ) : (
-                        <ChevronDown className="h-3 w-3" />
-                      )}
-                    </button>
-
-                    {expandedSources[m.id] && (
-                      <ul className="mt-2 space-y-1.5 font-mono text-[10px] text-fg-subtle bg-surface-0/60 p-2 rounded border border-border-subtle">
-                        {m.citations.map((c, idx) => (
-                          <li key={idx} className="flex flex-col gap-0.5">
-                            <span className="text-fg font-medium">
-                              • {c.document} <span className="text-fg-faint">§ {c.section}</span>
-                            </span>
-                            <span className="text-fg-faint">
-                              Match: {Math.round(c.relevance * 100)}%
-                              {c.stationId && ` · Station: ${c.stationId}`}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-
-                {/* Contextual Actions */}
-                {m.actions && m.actions.length > 0 && (
-                  <div className="mt-3 pt-2 flex flex-wrap gap-1.5 border-t border-border-subtle">
-                    {m.actions.map((act, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handleAction(act)}
-                        className="btn btn-sm !h-6 !text-[11px] font-mono"
-                      >
-                        {act.label}
-                        <ArrowRight className="h-2.5 w-2.5 text-fg-subtle" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
+    <Drawer open={open} onClose={() => setOpen(false)} title="TIRTA Intelligence Assistant" width="w-full max-w-md">
+      <div className="flex h-full flex-col">
+        {/* Subtitle banner */}
+        <div className="border-b border-border bg-surface-1 px-4 py-2.5 text-xs text-fg-muted flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Droplets className="h-3.5 w-3.5 text-water" />
+            <span className="font-semibold text-fg">TIRTA Knowledge Retrieval</span>
+          </div>
+          <span className="text-[10px] text-ok border border-ok/30 bg-ok/10 px-1.5 py-0.5 rounded">Grounded Domain AI</span>
         </div>
 
-        {/* Suggested Queries */}
-        <div className="px-4 py-2 bg-surface-0/70 border-t border-border shrink-0">
-          <p className="text-[10px] font-mono uppercase text-fg-subtle mb-1.5 tracking-wider">
-            Suggested Operational Queries
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {currentSuggestions.slice(0, 3).map((sugg, idx) => (
+        {/* Message history */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+          {messages.map((msg) => {
+            const isUser = msg.role === "user";
+            return (
+              <div key={msg.id} className={isUser ? "flex justify-end" : "flex justify-start"}>
+                <div className={`max-w-[92%] rounded-md p-3 border ${isUser ? "bg-surface-2 border-water/40 text-fg" : "bg-surface-0 border-border text-fg-muted"}`}>
+                  <div className="flex items-center justify-between gap-2 mb-1 pb-1 border-b border-border-subtle text-[10px] text-fg-subtle">
+                    <span className="font-medium text-fg">{isUser ? "You" : "TIRTA Assistant"}</span>
+                    <span>{msg.timestamp}</span>
+                  </div>
+
+                  <div className="whitespace-pre-wrap leading-relaxed text-fg text-[11px] font-sans">
+                    {msg.content}
+                  </div>
+
+                  {/* Grounded citations */}
+                  {msg.citations && msg.citations.length > 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-border-subtle">
+                      <button
+                        onClick={() =>
+                          setExpandedSources((prev) => ({
+                            ...prev,
+                            [msg.id]: !prev[msg.id],
+                          }))
+                        }
+                        className="flex items-center gap-1 text-[10px] text-fg-subtle hover:text-water transition-colors"
+                      >
+                        <FileText className="h-3 w-3" />
+                        <span>{msg.citations.length} Grounded Source(s)</span>
+                        {expandedSources[msg.id] ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      </button>
+
+                      {expandedSources[msg.id] && (
+                        <div className="mt-1.5 space-y-1.5">
+                          {msg.citations.map((c, idx) => (
+                            <div key={idx} className="p-1.5 rounded bg-surface-1 border border-border-subtle text-[10px]">
+                              <div className="font-semibold text-fg flex items-center justify-between">
+                                <span>{c.document}</span>
+                                <span className="text-water">{(c.relevance * 100).toFixed(0)}% Match</span>
+                              </div>
+                              <div className="text-fg-subtle text-[9px] mt-0.5">{c.section}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Contextual actions */}
+                  {msg.actions && msg.actions.length > 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-border-subtle flex flex-wrap gap-1.5">
+                      {msg.actions.map((act, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            if (act.stationId) selectStation(act.stationId);
+                            router.push(act.href);
+                            setOpen(false);
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-surface-2 hover:bg-surface-3 border border-border text-[10px] text-water transition-colors"
+                        >
+                          <span>{act.label}</span>
+                          <ArrowRight className="h-2.5 w-2.5" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Suggested queries */}
+        <div className="border-t border-border bg-surface-1 p-2">
+          <div className="text-[10px] text-fg-faint px-1 mb-1 font-mono uppercase">Suggested Research Queries:</div>
+          <div className="flex flex-wrap gap-1">
+            {currentSuggestions.slice(0, 3).map((s, idx) => (
               <button
                 key={idx}
-                onClick={() => sendMessage(sugg)}
-                className="text-[11px] font-mono text-left px-2 py-1 bg-surface-2 hover:bg-surface-3 text-fg-muted hover:text-fg rounded border border-border transition-colors truncate max-w-full"
+                onClick={() => sendMessage(s)}
+                className="text-[10px] px-2 py-1 rounded bg-surface-0 border border-border hover:border-water hover:text-water text-fg-subtle transition-colors truncate max-w-full"
               >
-                {sugg}
+                {s}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Chat input box */}
-        <div className="p-3 bg-surface-0 border-t border-border shrink-0">
+        {/* Input box */}
+        <div className="p-3 border-t border-border bg-surface-0">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -312,22 +300,18 @@ export function AssistantDrawer() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about water levels, RMSE, BS-017, routing… (⌘J)"
+              placeholder="Ask about water-stress risk, river topology, GBDT/GNN…"
+              className="flex-1 bg-surface-1 border border-border rounded px-3 py-1.5 text-xs text-fg placeholder:text-fg-subtle focus:outline-none focus:border-water font-mono"
               disabled={loading}
-              className="flex-1 input font-mono text-xs"
             />
             <button
               type="submit"
               disabled={!input.trim() || loading}
-              className="btn btn-primary btn-sm !h-7 !px-2.5 font-mono"
-              aria-label="Send query"
+              className="btn btn-sm bg-water text-white hover:bg-water-soft disabled:opacity-50 !h-8 px-2.5"
             >
               <CornerDownLeft className="h-3.5 w-3.5" />
             </button>
           </form>
-          <p className="text-[10px] font-mono text-fg-faint mt-1.5 text-center">
-            Domain-constrained: answers only ANCHOR hydrological and operational topics.
-          </p>
         </div>
       </div>
     </Drawer>

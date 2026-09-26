@@ -3,15 +3,44 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStations, useHistory, useForecast } from "@/hooks/use-api";
 import { useSelectionStore } from "@/store/selection-store";
-import { PageHeader, MetricCard, Panel, Segmented, ChartSkeleton, ErrorState, RiskBadge, StationBadge, Sparkline, RISK_STYLES, StatusBadge, Chip } from "@/components/ui/primitives";
-import { TimeSeriesChart } from "@/components/charts/charts";
-import { mergeSeries, gapsFrom } from "@/features/stations/station-panel";
+import {
+  PageHeader,
+  MetricCard,
+  Panel,
+  Segmented,
+  ChartSkeleton,
+  ErrorState,
+  RiskBadge,
+  StationBadge,
+  Sparkline,
+  RISK_STYLES,
+  StatusBadge,
+  Chip,
+} from "@/components/ui/primitives";
+import { MetricLineChart, CHART_COLORS } from "@/components/charts/charts";
 import { STATIONS, CATEGORY_LABEL } from "@/mock/stations";
-import { fmtTime } from "@/lib/format";
+import { STATIC_STATION_MAP } from "@/data/network-static";
 import { cn } from "@/lib/utils";
 import type { StationCategory } from "@/types/domain";
 
-const RANGES = [{ value: 24, label: "24h" }, { value: 72, label: "72h" }, { value: 168, label: "7d" }, { value: 336, label: "14d" }];
+type MonthlySignal =
+  | "SUPPLY"
+  | "BASEFLOW"
+  | "QUICKFLOW"
+  | "WITHDRAWAL"
+  | "AVAILABILITY"
+  | "LIMITATION"
+  | "RISK";
+
+const SIGNAL_OPTIONS: { value: MonthlySignal; label: string }[] = [
+  { value: "SUPPLY", label: "Water Supply" },
+  { value: "BASEFLOW", label: "Baseflow" },
+  { value: "QUICKFLOW", label: "Quickflow" },
+  { value: "WITHDRAWAL", label: "Withdrawals" },
+  { value: "AVAILABILITY", label: "Availability Proxy" },
+  { value: "LIMITATION", label: "SUI Limitation" },
+  { value: "RISK", label: "Model Risk" },
+];
 
 export default function MonitoringPage() {
   const router = useRouter();
@@ -20,125 +49,293 @@ export default function MonitoringPage() {
   const selectStation = useSelectionStore((s) => s.selectStation);
   const compare = useSelectionStore((s) => s.compareStationId);
   const setCompare = useSelectionStore((s) => s.setCompare);
-  const range = useSelectionStore((s) => s.timeRangeHours);
-  const setRange = useSelectionStore((s) => s.setTimeRange);
+
   const [category, setCategory] = useState<StationCategory | "ALL">("ALL");
-  const [region, setRegion] = useState<"ALL" | "PRIMARY" | "OTHER">("ALL");
-  const [signal, setSignal] = useState<"tma" | "rain">("tma");
-  const [agg, setAgg] = useState<30 | 60>(30);
+  const [region, setRegion] = useState<"ALL" | "PRIMARY" | "COLD_START">("ALL");
+  const [signal, setSignal] = useState<MonthlySignal>("SUPPLY");
 
-  const step = range > 96 ? 60 : agg;
-  const history = useHistory(selected, range, step);
-  const compareHistory = useHistory(compare, range, step);
+  const history = useHistory(selected, 12, 1);
+  const compareHistory = useHistory(compare, 12, 1);
   const forecast = useForecast(selected);
-
-  const series = useMemo(() => {
-    const base = mergeSeries(history.data?.points, forecast.data?.points);
-    if (!compareHistory.data) return base;
-    const cmp = new Map(compareHistory.data.points.map((p) => [p.t, p.tma]));
-    return base.map((p) => ({ ...p, compare: cmp.get(p.t) ?? null }));
-  }, [history.data, forecast.data, compareHistory.data]);
-  const gaps = useMemo(() => gapsFrom(history.data?.points), [history.data]);
 
   const list = stations.data ?? [];
   const snap = list.find((s) => s.station.id === selected);
-  const stale = list.filter((s) => s.status !== "ONLINE").length;
-  const missingPackets = list.reduce((a, s) => a + Math.round(s.missingRate24h * 24), 0);
-  const outliers = useMemo(() => (history.data?.points ?? []).filter((p) => p.quality === "OUTLIER").length, [history.data]);
-  const filtered = list.filter((s) => (category === "ALL" || s.station.category === category) && (region === "ALL" || (region === "PRIMARY") === s.station.primaryNetwork));
+  const staticSelected = STATIC_STATION_MAP[selected];
 
-  const forecastAt = new Map((forecast.data?.points ?? []).map((p) => [p.t, p.predicted]));
+  const filtered = list.filter((s) => {
+    if (category !== "ALL" && s.station.category !== category) return false;
+    if (region === "PRIMARY" && !s.station.primaryNetwork) return false;
+    if (region === "COLD_START" && !s.coldStart) return false;
+    return true;
+  });
+
+  // Build monthly time series data for the selected signal
+  const chartData = useMemo(() => {
+    const pts = history.data?.points ?? [];
+    const fc = forecast.data;
+
+    return pts.map((p, idx) => {
+      let val = p.supply;
+      let clim = p.climatology;
+
+      if (signal === "BASEFLOW") val = p.baseflow;
+      else if (signal === "QUICKFLOW") val = p.quickflow;
+      else if (signal === "WITHDRAWAL") val = p.withdrawal;
+      else if (signal === "AVAILABILITY") val = p.availabilityProxy;
+      else if (signal === "LIMITATION") val = p.waterLimitationProxy;
+      else if (signal === "RISK") val = p.riskScore;
+
+      const isLast = idx === pts.length - 1;
+      let forecastVal: number | null = null;
+      if (isLast && fc) {
+        if (signal === "RISK") forecastVal = fc.riskScore ?? fc.points?.[0]?.predicted ?? null;
+        else if (signal === "SUPPLY") forecastVal = fc.predictedSupply ?? null;
+        else if (signal === "AVAILABILITY") forecastVal = fc.predictedAvailability ?? null;
+        else if (signal === "LIMITATION") forecastVal = fc.predictedLimitation ?? null;
+      }
+
+      return {
+        month: p.monthName ?? new Date(p.t).toLocaleDateString("en-US", { month: "short" }),
+        actual: val,
+        climatology: clim,
+        forecast: forecastVal,
+      };
+    });
+  }, [history.data, forecast.data, signal]);
+
+  const unit =
+    signal === "LIMITATION" || signal === "RISK"
+      ? ""
+      : "m³/s";
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Live Monitoring" subtitle="Real-time TMA telemetry across the Bengawan Solo network." meta={<><Chip tone="water">30 stations</Chip><Chip>10-min ingestion cycle</Chip><Chip tone="water">forecast overlay: anchor-prod-v2.4.1</Chip></>} />
+      <PageHeader
+        title="Basin Water-Budget Monitor"
+        subtitle="Monthly hydrological balance, withdrawal pressure, and limitation proxies across HUC12 sub-basins."
+        meta={
+          <>
+            <Chip tone="water">HUC12 Sub-Basins</Chip>
+            <Chip>Monthly Aggregation</Chip>
+            <Chip tone="ok">Next-Month Early Warning</Chip>
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <MetricCard label="Data freshness" value={snap ? (snap.freshnessSec < 60 ? snap.freshnessSec : Math.round(snap.freshnessSec / 60)) : "—"} unit={snap && snap.freshnessSec >= 60 ? "min" : "sec"} hint="selected station" tone={snap && snap.freshnessSec > 1800 ? "warn" : "neutral"} />
-        <MetricCard label="Last ingestion" value={list.length ? fmtTime(Math.max(...list.map((s) => s.lastUpdated))) : "—"} hint="WIB · broker partition 0–3" />
-        <MetricCard label="Active stations" value={list.length ? list.length - stale : "—"} unit="/ 30" tone="ok" />
-        <MetricCard label="Stale data" value={stale} hint={stale ? list.filter((s) => s.status !== "ONLINE").map((s) => s.station.id).join(", ") : "none"} tone={stale ? "warn" : "ok"} />
-        <MetricCard label="Missing packets (24h)" value={missingPackets} hint="network-wide hourly slots" />
-        <MetricCard label="Outlier events" value={outliers} hint={`selected station · ${range}h`} tone={outliers ? "warn" : "neutral"} />
+      {/* 6 Key Basin Hydrological Metrics */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6 font-mono">
+        <MetricCard
+          label="Water Supply"
+          value={snap ? snap.currentSupply.toFixed(1) : "—"}
+          unit="m³/s"
+          hint="Streamflow balance"
+          tone="neutral"
+        />
+        <MetricCard
+          label="Withdrawal Pressure"
+          value={snap ? snap.totalWithdrawal.toFixed(1) : "—"}
+          unit="m³/s"
+          hint="Irrigation & public use"
+          tone={snap && snap.totalWithdrawal > 30 ? "warn" : "neutral"}
+        />
+        <MetricCard
+          label="Availability Proxy"
+          value={snap ? snap.availabilityProxy.toFixed(1) : "—"}
+          unit="m³/s"
+          hint="Supply - Withdrawal"
+          tone={snap && snap.availabilityProxy < 30 ? "crit" : "ok"}
+        />
+        <MetricCard
+          label="Climatology Anomaly"
+          value={
+            snap
+              ? (snap.climatologyAnomalySigma >= 0 ? "+" : "") +
+                snap.climatologyAnomalySigma.toFixed(2)
+              : "—"
+          }
+          unit="σ"
+          hint="vs Long-term normal"
+          tone={
+            snap && snap.climatologyAnomalySigma < -1.0
+              ? "crit"
+              : snap && snap.climatologyAnomalySigma < 0
+              ? "warn"
+              : "ok"
+          }
+        />
+        <MetricCard
+          label="SUI-like Limitation"
+          value={snap ? snap.waterLimitationProxy.toFixed(2) : "—"}
+          hint="Analytical limitation proxy"
+          tone={snap && snap.waterLimitationProxy > 0.65 ? "warn" : "neutral"}
+        />
+        <MetricCard
+          label="P(Water Stress t+1)"
+          value={snap ? `${(snap.riskScore * 100).toFixed(1)}%` : "—"}
+          hint={`${snap?.risk ?? "—"} tier`}
+          tone={
+            snap && snap.risk === "CRITICAL"
+              ? "crit"
+              : snap && snap.risk === "HIGH"
+              ? "warn"
+              : "ok"
+          }
+        />
       </div>
 
+      {/* Main Historical Chart Panel */}
       <Panel
-        title={snap ? `${snap.station.name} · ${snap.station.id}` : "Telemetry"}
-        subtitle="Observed TMA, model forecast with 90% interval, rainfall (right axis, inverted) and demo alert thresholds"
+        title={snap ? `${snap.station.name} (${snap.station.id})` : "Basin Hydrology"}
+        subtitle={`12-Month Historical Water-Budget Lineage with Climatology Baseline · DAG Depth Level ${staticSelected?.graphDepth ?? 1}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <select className="input" value={selected} onChange={(e) => selectStation(e.target.value)} aria-label="Station">
-              {STATIONS.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.id})</option>)}
+            <select
+              className="input font-mono text-xs"
+              value={selected}
+              onChange={(e) => selectStation(e.target.value)}
+              aria-label="Select HUC12 Sub-Basin"
+            >
+              {STATIONS.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({s.id})
+                </option>
+              ))}
             </select>
-            <select className="input" value={compare ?? ""} onChange={(e) => setCompare(e.target.value || null)} aria-label="Compare station">
-              <option value="">Compare…</option>
-              {STATIONS.filter((s) => s.id !== selected).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-            <Segmented ariaLabel="Time range" options={RANGES} value={range} onChange={setRange} />
-            <Segmented ariaLabel="Aggregation" options={[{ value: 30, label: "30 min" }, { value: 60, label: "1 h" }]} value={agg} onChange={setAgg} />
-            <Segmented ariaLabel="Signal" options={[{ value: "tma", label: "TMA" }, { value: "rain", label: "+ Rainfall" }]} value={signal} onChange={setSignal} />
+            <Segmented
+              ariaLabel="Signal"
+              options={SIGNAL_OPTIONS}
+              value={signal}
+              onChange={setSignal}
+            />
           </div>
         }
       >
         {history.isError ? (
-          <ErrorState error={history.error} onRetry={() => history.refetch()} title="Telemetry service unavailable" />
+          <ErrorState
+            error={history.error}
+            onRetry={() => history.refetch()}
+            title="Hydrological history unavailable"
+          />
         ) : history.isLoading ? (
           <ChartSkeleton height={360} />
         ) : (
-          <TimeSeriesChart
-            data={series}
-            thresholds={snap?.station.thresholds}
-            height={360}
-            showRainfall={signal === "rain"}
-            showBrush
-            gaps={gaps}
-            anchor={forecast.data?.anchor}
-            compareLabel={compare ? STATIONS.find((s) => s.id === compare)?.name : undefined}
-            tooltipExtra={(row) => {
-              const t = Number(row.t);
-              const actual = typeof row.actual === "number" ? row.actual : null;
-              const fc = forecastAt.get(t) ?? (typeof row.forecast === "number" ? row.forecast : null);
-              return (
-                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
-                  <span className="text-fg-subtle">Station</span><span className="text-right">{snap?.station.name}</span>
-                  {actual !== null && fc !== null && <><span className="text-fg-subtle">Difference</span><span className="mono text-right">{(fc - actual >= 0 ? "+" : "") + (fc - actual).toFixed(2)} m</span></>}
-                  <span className="text-fg-subtle">Risk level</span><span className="text-right" style={{ color: snap ? RISK_STYLES[snap.risk].hex : undefined }}>{snap?.risk}</span>
-                  <span className="text-fg-subtle">Data quality</span><span className="text-right">{String(row.quality ?? "FORECAST")}</span>
-                </div>
-              );
-            }}
-          />
+          <div className="space-y-2">
+            <MetricLineChart
+              data={chartData}
+              series={[
+                {
+                  key: "climatology",
+                  name: "Seasonal Normal (Climatology)",
+                  color: CHART_COLORS.band,
+                  dashed: true,
+                },
+                {
+                  key: "actual",
+                  name: "Observed Historical",
+                  color: CHART_COLORS.actual,
+                  area: true,
+                },
+                ...(signal === "RISK" || signal === "SUPPLY" || signal === "AVAILABILITY"
+                  ? [
+                      {
+                        key: "forecast",
+                        name: "Next-Month (t+1)",
+                        color: CHART_COLORS.forecast,
+                        dashed: true,
+                      },
+                    ]
+                  : []),
+              ]}
+              xKey="month"
+              unit={unit}
+              height={360}
+            />
+            <div className="flex flex-wrap items-center justify-between text-[11px] font-mono text-fg-subtle pt-2 border-t border-border/60">
+              <span>
+                Monthly timestep · SUI-like proxy = 1 - (Availability / Typical Seasonal Supply).
+              </span>
+              <div className="flex items-center gap-2">
+                <RiskBadge risk={snap?.risk ?? "LOW"} />
+                {snap?.coldStart && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                    Cold-Start Holdout
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
         )}
-        <div className="mt-3 flex flex-wrap items-center gap-2 t-caption">
-          <span>Missing-data windows are shaded red. Outliers (flagged, excluded) are removed from the observed line.</span>
-          {snap && <span className="ml-auto flex items-center gap-2"><RiskBadge risk={snap.risk} /><StatusBadge status={snap.status} /></span>}
-        </div>
       </Panel>
 
+      {/* Sub-Basin Grid */}
       <Panel
-        title="Station grid"
-        subtitle={`${filtered.length} stations · 24h sparklines · click to focus`}
+        title="HUC12 Sub-Basin Matrix"
+        subtitle={`${filtered.length} sub-basins · 12-month supply sparkline · click to inspect`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Segmented ariaLabel="Region" options={[{ value: "ALL", label: "All" }, { value: "PRIMARY", label: "Primary network" }, { value: "OTHER", label: "Other basins" }]} value={region} onChange={setRegion} />
-            <Segmented ariaLabel="Category" options={[{ value: "ALL", label: "All" }, { value: "NATURAL", label: "Natural" }, { value: "MIXED", label: "Mixed" }, { value: "DAM_WEIR", label: "Dam/Weir" }]} value={category} onChange={setCategory} />
+            <Segmented
+              ariaLabel="Region"
+              options={[
+                { value: "ALL", label: "All" },
+                { value: "PRIMARY", label: "Mainstem" },
+                { value: "COLD_START", label: "Cold-Start" },
+              ]}
+              value={region}
+              onChange={setRegion}
+            />
+            <Segmented
+              ariaLabel="Category"
+              options={[
+                { value: "ALL", label: "All" },
+                { value: "HEADWATER", label: "Headwater" },
+                { value: "TRIBUTARY", label: "Tributary" },
+                { value: "CONFLUENCE", label: "Confluence" },
+                { value: "MAINSTEM", label: "Mainstem" },
+              ]}
+              value={category}
+              onChange={setCategory}
+            />
           </div>
         }
         noPad
       >
-        <div className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 font-mono">
           {filtered.map((s) => (
-            <button key={s.station.id} onClick={() => selectStation(s.station.id)} onDoubleClick={() => router.push(`/stations?station=${s.station.id}`)} className={cn("flex items-center gap-3 bg-surface-1 px-3 py-2.5 text-left hover:bg-surface-2", s.station.id === selected && "bg-surface-2 ring-1 ring-inset ring-water/40")}>
-              <span className="h-9 w-1 rounded-full" style={{ background: RISK_STYLES[s.risk].hex }} />
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5 text-xs font-medium"><span className="truncate">{s.station.name}</span><StationBadge category={s.station.category} short /></span>
-                <span className="t-caption block">{CATEGORY_LABEL[s.station.category]} · {s.station.river}</span>
-              </span>
-              <span className="text-right">
-                <span className="mono block text-sm">{s.currentTma.toFixed(2)} <span className="t-caption">m</span></span>
-                <span className={cn("t-caption", s.trendRatePerHour > 0.03 ? "!text-[#ff9a5c]" : s.trendRatePerHour < -0.03 ? "!text-[#5fd699]" : "")}>{s.trendRatePerHour >= 0 ? "+" : ""}{s.trendRatePerHour.toFixed(2)} m/h</span>
-              </span>
-              <Sparkline data={s.sparkline} width={60} height={24} stroke={RISK_STYLES[s.risk].hex} />
+            <button
+              key={s.station.id}
+              onClick={() => selectStation(s.station.id)}
+              onDoubleClick={() => router.push(`/explorer?station=${s.station.id}`)}
+              className={cn(
+                "flex items-center gap-3 bg-surface-1 px-3 py-2.5 text-left hover:bg-surface-2 transition-colors",
+                s.station.id === selected && "bg-surface-2 ring-1 ring-inset ring-water/40"
+              )}
+            >
+              <span
+                className="h-9 w-1 rounded-full shrink-0"
+                style={{ background: RISK_STYLES[s.risk].hex }}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 text-xs font-medium">
+                  <span className="truncate text-fg">{s.station.name}</span>
+                </div>
+                <div className="text-[10px] text-fg-subtle truncate mt-0.5">
+                  {s.station.id} · Level {s.station.graphDepth} {s.coldStart ? "· Holdout" : ""}
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <span className="block text-xs font-bold text-fg">
+                  {(s.riskScore * 100).toFixed(0)}%
+                </span>
+                <span className="text-[10px] text-fg-subtle block">
+                  {s.currentSupply.toFixed(0)} m³/s
+                </span>
+              </div>
+              <Sparkline
+                data={s.sparkline}
+                width={50}
+                height={20}
+                stroke={RISK_STYLES[s.risk].hex}
+              />
             </button>
           ))}
         </div>

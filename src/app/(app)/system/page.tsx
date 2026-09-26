@@ -2,43 +2,85 @@
 import { useMemo } from "react";
 import { useHealth } from "@/hooks/use-api";
 import { RoleGate } from "@/features/shared/role-gate";
-import { PageHeader, Panel, MetricCard, Skeleton, ErrorState, Chip, StatusBadge, Sparkline, KV } from "@/components/ui/primitives";
+import { PageHeader, Panel, MetricCard, Skeleton, ErrorState, Chip, StatusBadge } from "@/components/ui/primitives";
 import { fmtTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ServiceHealth } from "@/types/domain";
 
 const POS: Record<string, [number, number]> = {
-  "api-gateway": [80, 60],
-  "inference-orchestrator": [300, 60],
-  "feature-pipeline": [520, 20],
-  "model-service": [520, 100],
-  "graph-service": [520, 180],
-  "data-ingestion": [740, 20],
-  scheduler: [300, 200],
-  "notification-service": [80, 200],
+  "api-gateway": [60, 40],
+  "data-ingestion": [60, 140],
+  "hydrology-processing": [260, 140],
+  "temporal-lineage": [260, 40],
+  "directed-graph-service": [460, 40],
+  "feature-service": [460, 140],
+  "gbdt-service": [660, 40],
+  "gnn-service": [660, 140],
+  "risk-engine": [860, 90],
+  "alert-service": [1060, 40],
+  "audit-service": [1060, 140],
 };
 
 function DependencyGraph({ services }: { services: ServiceHealth[] }) {
-  const color = (s: ServiceHealth["status"]) => (s === "HEALTHY" ? "#2fbf71" : s === "DEGRADED" ? "#f0a826" : "#ef5350");
+  const color = (s: ServiceHealth["status"]) =>
+    s === "HEALTHY" ? "#2fbf71" : s === "DEGRADED" ? "#f0a826" : "#ef5350";
   const byId = Object.fromEntries(services.map((s) => [s.id, s]));
+
   return (
-    <svg viewBox="0 0 900 260" className="w-full h-auto" role="img" aria-label="Service dependency graph">
+    <svg viewBox="0 0 1240 240" className="w-full h-auto" role="img" aria-label="TIRTA service mesh architecture">
       <defs>
-        <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#3a4a5a" /></marker>
+        <marker
+          id="arrow"
+          viewBox="0 0 10 10"
+          refX="10"
+          refY="5"
+          markerWidth="6"
+          markerHeight="6"
+          orient="auto-start-reverse"
+        >
+          <path d="M0 0L10 5L0 10z" fill="#3a4a5a" />
+        </marker>
       </defs>
-      {services.flatMap((s) => s.dependencies.map((d) => {
-        const [x1, y1] = POS[s.id];
-        const [x2, y2] = POS[d];
-        return <path key={`${s.id}-${d}`} d={`M${x1 + 140},${y1 + 22} C${x1 + 180},${y1 + 22} ${x2 - 40},${y2 + 22} ${x2},${y2 + 22}`} fill="none" stroke="#2c3a47" strokeWidth={1.4} markerEnd="url(#arrow)" />;
-      }))}
+      {services.flatMap((s) =>
+        s.dependencies.map((d) => {
+          const p1 = POS[s.id];
+          const p2 = POS[d];
+          if (!p1 || !p2) return null;
+          const [x1, y1] = p1;
+          const [x2, y2] = p2;
+          return (
+            <path
+              key={`${s.id}-${d}`}
+              d={`M${x1 + 140},${y1 + 22} C${x1 + 170},${y1 + 22} ${x2 - 30},${y2 + 22} ${x2},${y2 + 22}`}
+              fill="none"
+              stroke="#2c3a47"
+              strokeWidth={1.4}
+              markerEnd="url(#arrow)"
+            />
+          );
+        })
+      )}
       {services.map((s) => {
-        const [x, y] = POS[s.id];
+        const p = POS[s.id];
+        if (!p) return null;
+        const [x, y] = p;
         return (
           <g key={s.id} transform={`translate(${x} ${y})`}>
-            <rect width={140} height={44} rx={6} fill="#131920" stroke={s.status === "HEALTHY" ? "#1f2a35" : color(s.status)} strokeWidth={1.2} />
+            <rect
+              width={140}
+              height={44}
+              rx={6}
+              fill="#131920"
+              stroke={s.status === "HEALTHY" ? "#1f2a35" : color(s.status)}
+              strokeWidth={1.2}
+            />
             <circle cx={12} cy={22} r={4} fill={color(s.status)} />
-            <text x={24} y={19} fontSize={11} fill="#e6edf3" fontFamily="var(--font-sans)" fontWeight={500}>{s.name}</text>
-            <text x={24} y={33} fontSize={9.5} fill="#6b7c8c" fontFamily="var(--font-mono)">{s.latencyMs} ms · {s.replicas}× · {byId[s.id].version}</text>
+            <text x={24} y={19} fontSize={10} fill="#e6edf3" fontWeight={500}>
+              {s.name}
+            </text>
+            <text x={24} y={33} fontSize={9} fill="#6b7c8c" fontFamily="monospace">
+              {s.latencyMs} ms · {s.replicas}× · {byId[s.id]?.version ?? "v2"}
+            </text>
           </g>
         );
       })}
@@ -49,55 +91,122 @@ function DependencyGraph({ services }: { services: ServiceHealth[] }) {
 export default function SystemPage() {
   const health = useHealth();
   const services = health.data?.services ?? [];
-  const summary = useMemo(() => ({ healthy: services.filter((s) => s.status === "HEALTHY").length, degraded: services.filter((s) => s.status === "DEGRADED").length, down: services.filter((s) => s.status === "DOWN").length, rpm: services.reduce((a, s) => a + s.requestsPerMin, 0), cpu: services.length ? services.reduce((a, s) => a + s.cpu, 0) / services.length : 0 }), [services]);
+  const summary = useMemo(
+    () => ({
+      healthy: services.filter((s) => s.status === "HEALTHY").length,
+      degraded: services.filter((s) => s.status === "DEGRADED").length,
+      down: services.filter((s) => s.status === "DOWN").length,
+      rpm: services.reduce((a, s) => a + s.requestsPerMin, 0),
+      cpu: services.length
+        ? services.reduce((a, s) => a + s.cpu, 0) / services.length
+        : 0,
+    }),
+    [services]
+  );
 
   if (health.isError) return <ErrorState error={health.error} onRetry={() => health.refetch()} />;
 
   return (
     <RoleGate>
       <div className="space-y-5">
-        <PageHeader title="System Health" subtitle="Infrastructure observability for the ANCHOR platform — service status, dependency topology, saturation and error budgets." meta={<><Chip tone="ok">{summary.healthy} healthy</Chip><Chip tone={summary.degraded ? "warn" : "neutral"}>{summary.degraded} degraded</Chip><Chip tone={summary.down ? "crit" : "neutral"}>{summary.down} down</Chip><Chip>Kubernetes · ap-southeast-3 · 3 AZ</Chip></>} />
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-          <MetricCard label="Services" value={`${summary.healthy}/${services.length || 8}`} tone={summary.degraded || summary.down ? "warn" : "ok"} hint="healthy" />
-          <MetricCard label="Total requests" value={summary.rpm.toLocaleString()} unit="/min" />
-          <MetricCard label="Mean CPU" value={summary.cpu.toFixed(0)} unit="%" tone={summary.cpu > 70 ? "warn" : "neutral"} />
-          <MetricCard label="Error budget (30d)" value="94.1" unit="%" tone="ok" hint="SLO 99.9% availability" />
-          <MetricCard label="Last check" value={health.data ? fmtTime(health.data.generatedAt) : "—"} hint="WIB · 15 s probe interval" />
+        <PageHeader
+          title="System Health & MLOps Infrastructure"
+          subtitle="Production service mesh observability for the TIRTA platform — dual-inference pipeline, feature store, and reachability graph."
+          meta={
+            <>
+              <Chip tone="ok">{summary.healthy} healthy</Chip>
+              <Chip tone={summary.degraded ? "warn" : "neutral"}>
+                {summary.degraded} degraded
+              </Chip>
+              <Chip tone="water">Dual Inference Mesh</Chip>
+              <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 font-mono text-xs">
+                DEMO TELEMETRY
+              </span>
+            </>
+          }
+        />
+
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5 font-mono">
+          <MetricCard
+            label="Service Mesh"
+            value={`${summary.healthy}/${services.length}`}
+            unit="services"
+            tone="ok"
+            hint="All core nodes healthy"
+          />
+          <MetricCard
+            label="Throughput"
+            value={summary.rpm.toLocaleString()}
+            unit="req/min"
+            hint="API gateway requests"
+          />
+          <MetricCard
+            label="Average CPU"
+            value={`${summary.cpu.toFixed(1)}%`}
+            hint="Cluster compute load"
+          />
+          <MetricCard
+            label="GPU Acceleration"
+            value="38.4%"
+            unit="util"
+            hint="PyTorch GNN inference"
+            tone="water"
+          />
+          <MetricCard
+            label="Queue Depth"
+            value="14"
+            unit="jobs"
+            hint="Asynchronous batch forecasts"
+            tone="ok"
+          />
         </div>
 
-        <Panel title="Service dependency graph" subtitle="Request flow · edge = runtime dependency · node colour = health">
-          {services.length ? <DependencyGraph services={services} /> : <Skeleton className="h-64" />}
+        <Panel
+          title="TIRTA Operational Service Mesh Dependency Graph"
+          subtitle="Directed architectural dataflow from ingestion to GBDT & GNN dual-inference and early warning risk distribution"
+          noPad
+        >
+          <div className="p-4 overflow-x-auto">
+            <DependencyGraph services={services} />
+          </div>
         </Panel>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {!services.length && Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-48" />)}
-          {services.map((s) => (
-              <div key={s.id} className={cn("panel p-4", s.status !== "HEALTHY" && "border-[#6b4d16]")}>
-                <div className="flex items-start justify-between">
-                  <div><div className="text-sm font-medium">{s.name}</div><div className="t-caption mono">{s.id} · v{s.version} · {s.region}</div></div>
-                  <StatusBadge status={s.status} />
-                </div>
-                <div className="mt-3 flex items-end justify-between">
-                  <div><div className="t-label">CPU</div><div className="mono text-lg">{s.cpu.toFixed(0)}%</div></div>
-                  <Sparkline data={s.history} width={110} height={30} stroke={s.status === "HEALTHY" ? "#3b9eff" : "#f0a826"} />
-                </div>
-                <div className="mt-2">
-                  <KV k="Latency" v={`${s.latencyMs} ms`} mono />
-                  <KV k="Memory" v={`${s.memory.toFixed(0)}%`} mono />
-                  <KV k="Requests" v={`${s.requestsPerMin.toLocaleString()}/min`} mono />
-                  <KV k="Error rate" v={<span className={s.errorRate > 0.005 ? "text-[#f5c261]" : ""}>{(s.errorRate * 100).toFixed(2)}%</span>} mono />
-                  <KV k="Uptime (30d)" v={`${s.uptime}%`} mono />
-                  <KV k="Replicas" v={s.replicas} mono />
-                </div>
-              </div>
-          ))}
-        </div>
-
-        <Panel title="Infrastructure" subtitle="Platform components and integrations">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
-            {[["Container runtime", "Docker 26 · distroless images", "ok"], ["Orchestration", "Kubernetes 1.30 · 3 node pools", "ok"], ["Cloud", "ap-southeast-3 (Jakarta) · 3 AZ", "ok"], ["Metrics", "Prometheus · 14 d retention", "ok"], ["Dashboards", "Grafana · 12 boards · SLO alerts", "ok"], ["Logs", "Loki · structured JSON · 30 d", "ok"], ["Tracing", "OpenTelemetry → Tempo", "ok"], ["Audit", "Immutable append-only ledger", "ok"]].map(([k, v]) => (
-              <div key={k} className="rounded-md border border-border bg-surface-0 px-3 py-2"><div className="t-label">{k}</div><div className="mt-0.5 text-fg-muted">{v}</div></div>
-            ))}
+        <Panel
+          title="Service Telemetry Registry"
+          subtitle="Real-time latency, throughput, error rates, and resource utilization (Demo Telemetry)"
+          noPad
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full font-mono text-xs text-left">
+              <thead className="bg-surface-2/60 border-b border-border text-[10px] text-fg-subtle uppercase">
+                <tr>
+                  <th className="p-3">Service Name</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3 text-right">Latency</th>
+                  <th className="p-3 text-right">Throughput</th>
+                  <th className="p-3 text-right">CPU</th>
+                  <th className="p-3 text-right">Memory</th>
+                  <th className="p-3 text-right">Replicas</th>
+                  <th className="p-3">Version</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-subtle">
+                {services.map((s) => (
+                  <tr key={s.id} className="hover:bg-surface-2 transition-colors">
+                    <td className="p-3 font-medium text-fg">{s.name}</td>
+                    <td className="p-3">
+                      <StatusBadge status={s.status} dot />
+                    </td>
+                    <td className="p-3 text-right">{s.latencyMs} ms</td>
+                    <td className="p-3 text-right">{s.requestsPerMin} rpm</td>
+                    <td className="p-3 text-right">{s.cpu}%</td>
+                    <td className="p-3 text-right">{s.memory}%</td>
+                    <td className="p-3 text-right">{s.replicas}×</td>
+                    <td className="p-3 text-fg-subtle">{s.version}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </Panel>
       </div>

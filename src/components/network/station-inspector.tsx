@@ -1,10 +1,15 @@
 "use client";
 import Link from "next/link";
-import { X, ArrowRight, MapPin, Activity, Compass, ExternalLink, GitCommit } from "lucide-react";
-import { RiskBadge, StationBadge, StatusBadge, KV, RISK_STYLES } from "@/components/ui/primitives";
+import { X, ArrowRight, MapPin, Compass, Droplets, GitFork, AlertTriangle, ShieldCheck } from "lucide-react";
+import { RiskBadge, StationBadge, StatusBadge, KV } from "@/components/ui/primitives";
 import { ConfidencePanel } from "@/features/stations/station-panel";
-import { STATIC_STATION_MAP, type StaticStation } from "@/data/network-static";
-import { STRATEGY_LABEL } from "@/mock/stations";
+import {
+  STATIC_STATION_MAP,
+  getUpstream1Hop,
+  getUpstream2Hop,
+  getUpstream3Hop,
+  getDownstreamPath,
+} from "@/data/network-static";
 import type { StationDetail, NetworkEdge } from "@/types/domain";
 import { cn } from "@/lib/utils";
 
@@ -35,36 +40,44 @@ export function StationInspector({
   const staticStation = STATIC_STATION_MAP[stationId];
   if (!staticStation) return null;
 
-  const isPrimary = staticStation.primary;
-  const currentTma = detail?.currentTma ?? staticStation.currentTma;
-  const forecast6h = detail?.forecast6h ?? staticStation.forecast6h;
-  const forecast12h = detail
-    ? Number((currentTma * 1.08).toFixed(2))
-    : Number((staticStation.forecast6h * 1.03).toFixed(2));
-  const forecast24h = detail?.forecast24h ?? staticStation.forecast24h;
   const risk = detail?.risk ?? staticStation.risk;
+  const riskScore = detail?.riskScore ?? staticStation.riskScore;
   const status = detail?.status ?? "ONLINE";
+  const coldStart = staticStation.coldStart;
+  const currentSupply = detail?.currentSupply ?? staticStation.currentSupply;
+  const availabilityProxy = detail?.availabilityProxy ?? staticStation.availabilityProxy;
+  const waterLimitationProxy = detail?.waterLimitationProxy ?? staticStation.waterLimitationProxy;
+  const climatologyAnomaly = detail?.climatologyAnomalySigma ?? staticStation.climatologyAnomalySigma;
+  const totalWithdrawal = detail?.totalWithdrawal ?? staticStation.totalWithdrawal;
+
   const confidence = detail?.confidence ?? {
-    score: isPrimary ? 0.91 : 0.84,
+    score: coldStart ? 0.68 : 0.86,
     drivers: [
-      { label: "AWLR Telemetry", contribution: 0.42 },
-      { label: "Rainfall Radar", contribution: 0.35 },
-      { label: "Historical Routing", contribution: 0.23 },
+      { label: "Climatology Anomaly", contribution: 0.38, group: "climatology" },
+      { label: "Water Limitation Proxy", contribution: 0.28, group: "limitation" },
+      { label: "Directed Upstream Reachability", contribution: 0.21, group: "graph" },
+      { label: "Withdrawal Pressure", contribution: 0.13, group: "withdrawal" },
     ],
-    reconciliationAdjustment: 0.04,
-    uncertaintyM: 0.18,
+    reconciliationAdjustment: coldStart ? 0.08 : 0.03,
+    uncertaintyM: 0.12,
+    coldStart: coldStart,
   };
+
+  const up1 = getUpstream1Hop(stationId);
+  const up2 = getUpstream2Hop(stationId);
+  const up3 = getUpstream3Hop(stationId);
+  const downPath = getDownstreamPath(stationId);
 
   return (
     <aside
       className={cn(
-        "panel h-full w-full max-w-[390px] border-l border-border bg-surface-0/95 shadow-2xl flex flex-col overflow-hidden select-none",
+        "panel h-full w-full max-w-[400px] border-l border-border bg-surface-0/95 shadow-2xl flex flex-col overflow-hidden select-none",
         className
       )}
       role="complementary"
-      aria-label="Station Telemetry & Topology Inspector"
+      aria-label="HUC12 Basin Intelligence & Reachability Inspector"
     >
-      {/* 1. Header: Station Identity & Close Button */}
+      {/* 1. Header: Sub-Basin Identity & Close Button */}
       <div className="flex items-start justify-between border-b border-border px-4 py-3 bg-surface-1/60">
         <div>
           <div className="flex items-center gap-2">
@@ -78,23 +91,22 @@ export function StationInspector({
             <StationBadge category={staticStation.category} />
             <RiskBadge risk={risk} />
             <StatusBadge status={status} />
-            <span
-              className={cn(
-                "px-1.5 py-0.5 rounded border font-medium",
-                isPrimary
-                  ? "bg-water/10 border-water/30 text-water"
-                  : "bg-surface-2 border-border text-fg-subtle"
-              )}
-            >
-              {isPrimary ? "Primary Network ● Connected" : "Outside Primary Network"}
-            </span>
+            {coldStart ? (
+              <span className="px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-400 font-medium">
+                Cold-Start Spatial Holdout
+              </span>
+            ) : (
+              <span className="px-1.5 py-0.5 rounded border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 font-medium">
+                Historical Anchor Sub-Basin
+              </span>
+            )}
           </div>
         </div>
 
         <button
           className="btn btn-ghost btn-sm !h-7 !w-7 !p-0 text-fg-subtle hover:text-fg"
           onClick={onClose}
-          aria-label="Close station inspector"
+          aria-label="Close sub-basin inspector"
         >
           <X className="h-4 w-4" />
         </button>
@@ -102,176 +114,225 @@ export function StationInspector({
 
       {/* 2. Scrollable Body Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 font-mono text-xs">
-        {/* Physical Geospatial Coordinates */}
+        {/* Geographic & Basin Topology Parameters */}
         <div className="rounded border border-border bg-surface-1/60 p-2.5 space-y-1.5">
           <div className="flex items-center justify-between text-fg-subtle">
             <span className="flex items-center gap-1.5 text-water">
-              <MapPin className="h-3.5 w-3.5" /> Geographic Anchor
+              <MapPin className="h-3.5 w-3.5" /> Spatial Unit
             </span>
             <span className="text-fg font-medium">
-              {staticStation.latitude.toFixed(3)}° S, {staticStation.longitude.toFixed(3)}° E
+              HUC12 · {staticStation.latitude.toFixed(3)}° S, {staticStation.longitude.toFixed(3)}° E
             </span>
           </div>
 
           <div className="grid grid-cols-3 gap-2 pt-1.5 border-t border-border/50 text-[11px] text-fg-subtle">
             <div>
-              <span className="text-[10px] uppercase text-fg-faint block">River</span>
-              <span className="text-fg font-medium truncate block" title={staticStation.river}>
-                {staticStation.river}
-              </span>
+              <span className="text-[10px] uppercase text-fg-faint block">Basin Area</span>
+              <span className="text-fg font-medium block">{staticStation.basinAreaKm2.toLocaleString()} km²</span>
             </div>
             <div>
-              <span className="text-[10px] uppercase text-fg-faint block">Elevation</span>
-              <span className="text-fg font-medium block">{staticStation.elevationM} m</span>
+              <span className="text-[10px] uppercase text-fg-faint block">Population</span>
+              <span className="text-fg font-medium block">{staticStation.population.toLocaleString()}</span>
             </div>
             <div>
-              <span className="text-[10px] uppercase text-fg-faint block">Catchment</span>
-              <span className="text-fg font-medium block">{staticStation.catchmentKm2} km²</span>
+              <span className="text-[10px] uppercase text-fg-faint block">DAG Depth</span>
+              <span className="text-fg font-medium block">Level {staticStation.graphDepth}</span>
             </div>
           </div>
         </div>
 
-        {/* Real-time Water Level (TMA) & Forecast Multi-Horizon */}
+        {/* Next-Month Water-Stress Forecast Summary */}
+        <div className="rounded border border-border bg-surface-1 p-2.5 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wider text-fg-subtle flex items-center gap-1">
+              <Droplets className="h-3.5 w-3.5 text-water" /> Next-Month Stress Risk
+            </span>
+            <span className="text-[10px] text-fg-subtle">Month t+1</span>
+          </div>
+
+          <div className="flex items-baseline justify-between">
+            <div>
+              <span className="text-2xl font-bold font-mono tracking-tight text-fg">
+                {(riskScore * 100).toFixed(1)}%
+              </span>
+              <span className="ml-1 text-[11px] text-fg-subtle">P(water stress)</span>
+            </div>
+            <div className="text-right">
+              <span className="text-xs font-semibold text-water uppercase">{risk} TIER</span>
+              <div className="text-[10px] text-fg-subtle">Confidence {(confidence.score * 100).toFixed(0)}%</div>
+            </div>
+          </div>
+          <div className="text-[9px] text-fg-subtle italic border-t border-border/40 pt-1">
+            Risk tier is a demonstration interpretation of the continuous model probability.
+          </div>
+        </div>
+
+        {/* Monthly Water-Budget Quantities */}
         <div>
           <div className="text-[10px] uppercase text-fg-subtle mb-1.5 tracking-wider flex items-center justify-between">
-            <span>Water Level (TMA) & Forecasts</span>
-            <span className="text-[10px] text-fg-faint">Alert: {staticStation.alertThreshold} m</span>
+            <span>Water Budget & Availability</span>
+            <span className="text-[10px] text-fg-faint">Monthly Balance</span>
           </div>
 
           <div className="grid grid-cols-3 gap-1.5">
             <div className="rounded border border-border bg-surface-1 p-2">
-              <div className="text-[9px] uppercase text-fg-subtle">Observed</div>
+              <div className="text-[9px] uppercase text-fg-subtle">Supply</div>
               <div className="text-sm font-semibold text-fg mt-0.5">
-                {currentTma.toFixed(2)} <span className="text-[10px] font-normal text-fg-subtle">m</span>
+                {currentSupply.toFixed(1)} <span className="text-[10px] font-normal text-fg-subtle">m³/s</span>
               </div>
             </div>
 
             <div className="rounded border border-border bg-surface-1 p-2">
-              <div className="text-[9px] uppercase text-water">Forecast +6h</div>
-              <div className="text-sm font-semibold text-water mt-0.5">
-                {forecast6h.toFixed(2)} <span className="text-[10px] font-normal text-fg-subtle">m</span>
+              <div className="text-[9px] uppercase text-fg-subtle">Withdrawal</div>
+              <div className="text-sm font-semibold text-amber-400 mt-0.5">
+                {totalWithdrawal.toFixed(1)} <span className="text-[10px] font-normal text-fg-subtle">m³/s</span>
               </div>
             </div>
 
             <div className="rounded border border-border bg-surface-1 p-2">
-              <div className="text-[9px] uppercase text-water">Forecast +24h</div>
+              <div className="text-[9px] uppercase text-water">Availability</div>
               <div className="text-sm font-semibold text-water mt-0.5">
-                {forecast24h.toFixed(2)} <span className="text-[10px] font-normal text-fg-subtle">m</span>
+                {availabilityProxy.toFixed(1)} <span className="text-[10px] font-normal text-fg-subtle">m³/s</span>
               </div>
+            </div>
+          </div>
+
+          <div className="mt-1.5 grid grid-cols-2 gap-1.5 text-[11px]">
+            <div className="rounded border border-border bg-surface-1 p-2">
+              <span className="text-[9px] uppercase text-fg-subtle block">Climatology Anomaly</span>
+              <span className={cn(
+                "text-xs font-semibold block mt-0.5",
+                climatologyAnomaly < -1.0 ? "text-red-400" : climatologyAnomaly < 0 ? "text-amber-400" : "text-emerald-400"
+              )}>
+                {climatologyAnomaly >= 0 ? "+" : ""}{climatologyAnomaly.toFixed(2)}σ
+              </span>
+            </div>
+            <div className="rounded border border-border bg-surface-1 p-2">
+              <span className="text-[9px] uppercase text-fg-subtle block">SUI-like Proxy</span>
+              <span className="text-xs font-semibold text-fg block mt-0.5">
+                {waterLimitationProxy.toFixed(2)}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Hydrological Topology Section */}
-        {isPrimary ? (
-          <div className="space-y-3">
-            <div className="text-[10px] uppercase text-fg-subtle tracking-wider flex items-center justify-between border-b border-border/50 pb-1">
-              <span>Network Topology</span>
-              <span className="text-emerald-400 font-medium">1 Tree Component</span>
-            </div>
+        {/* Directed Multi-Hop Reachability Section */}
+        <div className="space-y-3">
+          <div className="text-[10px] uppercase text-fg-subtle tracking-wider flex items-center justify-between border-b border-border/50 pb-1">
+            <span className="flex items-center gap-1">
+              <GitFork className="h-3 w-3 text-cyan-400" />
+              <span>Directed Multi-Hop Reachability</span>
+            </span>
+            <span className="text-cyan-400 font-medium">{up1.length + up2.length + up3.length} Upstream Basins</span>
+          </div>
 
-            {/* Upstream Sources */}
+          {/* Upstream Hop Breakdown */}
+          <div className="space-y-2">
+            {/* 1-hop upstream */}
             <div>
-              <div className="flex items-center justify-between mb-1 text-[11px]">
+              <div className="flex items-center justify-between text-[11px] mb-1">
                 <span className="text-fg-subtle flex items-center gap-1">
-                  <Compass className="h-3 w-3 text-cyan-400" />
-                  <span>Upstream Sources</span>
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+                  <span>1-Hop Direct Upstream</span>
                 </span>
-                <span className="text-fg-subtle">
-                  {staticStation.upstreamStations.length === 0
-                    ? "Headwater Node"
-                    : `${staticStation.upstreamStations.length} direct`}
-                </span>
+                <span className="text-fg-subtle">{up1.length === 0 ? "Headwater Origin" : `${up1.length} basin(s)`}</span>
               </div>
-
-              {staticStation.upstreamStations.length === 0 ? (
-                <div className="p-2 rounded border border-border bg-surface-1/60 text-[11px] text-fg-subtle">
-                  Headwater origin node · No upstream monitoring stations
+              {up1.length === 0 ? (
+                <div className="p-2 rounded border border-border bg-surface-1/60 text-[10px] text-fg-subtle italic">
+                  Headwater sub-basin — no upstream contributing nodes in DAG.
                 </div>
               ) : (
-                <div className="space-y-1">
-                  {staticStation.upstreamStations.map((upId) => {
-                    const upStn = STATIC_STATION_MAP[upId];
-                    return (
-                      <button
-                        key={upId}
-                        onClick={() => onSelectStation(upId)}
-                        className="w-full flex items-center justify-between rounded border border-border bg-surface-1 px-2.5 py-1.5 text-xs hover:border-cyan-400 hover:bg-surface-2 transition-colors text-left"
-                      >
-                        <span className="flex items-center gap-1.5 font-medium text-fg">
-                          <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
-                          {upStn?.name ?? upId}
-                        </span>
-                        <span className="text-[10px] text-fg-subtle">{upId}</span>
-                      </button>
-                    );
-                  })}
+                <div className="flex flex-wrap gap-1">
+                  {up1.map((id) => (
+                    <button
+                      key={id}
+                      onClick={() => onSelectStation(id)}
+                      className="px-2 py-1 rounded border border-border bg-surface-1 hover:border-cyan-400 hover:bg-surface-2 transition-colors text-[10px] text-fg font-medium"
+                    >
+                      {id}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* Downstream Outlets */}
-            <div>
-              <div className="flex items-center justify-between mb-1 text-[11px]">
+            {/* 2-hop upstream */}
+            {up2.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between text-[11px] mb-1">
+                  <span className="text-fg-subtle flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-cyan-600" />
+                    <span>2-Hop Upstream Catchment</span>
+                  </span>
+                  <span className="text-fg-subtle">{up2.length} basin(s)</span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {up2.map((id) => (
+                    <button
+                      key={id}
+                      onClick={() => onSelectStation(id)}
+                      className="px-2 py-1 rounded border border-border bg-surface-1 hover:border-cyan-400 hover:bg-surface-2 transition-colors text-[10px] text-fg-muted"
+                    >
+                      {id}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 3-hop upstream */}
+            {up3.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between text-[11px] mb-1">
+                  <span className="text-fg-subtle flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-cyan-800" />
+                    <span>3-Hop Upstream Reach</span>
+                  </span>
+                  <span className="text-fg-subtle">{up3.length} basin(s)</span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {up3.map((id) => (
+                    <button
+                      key={id}
+                      onClick={() => onSelectStation(id)}
+                      className="px-2 py-1 rounded border border-border bg-surface-1 hover:border-cyan-400 hover:bg-surface-2 transition-colors text-[10px] text-fg-subtle"
+                    >
+                      {id}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Downstream Receiving Basin */}
+            <div className="pt-1.5 border-t border-border/40">
+              <div className="flex items-center justify-between text-[11px] mb-1">
                 <span className="text-fg-subtle flex items-center gap-1">
                   <Compass className="h-3 w-3 text-emerald-400" />
-                  <span>Downstream Outlet</span>
+                  <span>Downstream Receiving Basin</span>
                 </span>
                 <span className="text-fg-subtle">
-                  {staticStation.downstreamStations.length === 0
-                    ? "River Estuary"
-                    : "1 direct outlet"}
+                  {staticStation.downstreamStationId ? "1 direct receiving node" : "Terminal Basin Outlet"}
                 </span>
               </div>
-
-              {staticStation.downstreamStations.length === 0 ? (
-                <div className="p-2 rounded border border-border bg-surface-1/60 text-[11px] text-fg-subtle">
-                  Terminal basin outlet node (Ujung Pangkah · Java Sea)
-                </div>
+              {staticStation.downstreamStationId ? (
+                <button
+                  onClick={() => onSelectStation(staticStation.downstreamStationId!)}
+                  className="w-full flex items-center justify-between rounded border border-border bg-surface-1 px-2.5 py-1.5 text-xs hover:border-emerald-400 hover:bg-surface-2 transition-colors text-left"
+                >
+                  <span className="flex items-center gap-1.5 font-medium text-fg">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    {STATIC_STATION_MAP[staticStation.downstreamStationId]?.name ?? staticStation.downstreamStationId}
+                  </span>
+                  <span className="text-[10px] text-fg-subtle">{staticStation.downstreamStationId}</span>
+                </button>
               ) : (
-                <div className="space-y-1">
-                  {staticStation.downstreamStations.map((downId) => {
-                    const downStn = STATIC_STATION_MAP[downId];
-                    return (
-                      <button
-                        key={downId}
-                        onClick={() => onSelectStation(downId)}
-                        className="w-full flex items-center justify-between rounded border border-border bg-surface-1 px-2.5 py-1.5 text-xs hover:border-emerald-400 hover:bg-surface-2 transition-colors text-left"
-                      >
-                        <span className="flex items-center gap-1.5 font-medium text-fg">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                          {downStn?.name ?? downId}
-                        </span>
-                        <span className="text-[10px] text-fg-subtle">{downId}</span>
-                      </button>
-                    );
-                  })}
+                <div className="p-2 rounded border border-border bg-surface-1/60 text-[10px] text-fg-subtle italic">
+                  Terminal basin outlet — discharges to regional receiving water body.
                 </div>
               )}
             </div>
           </div>
-        ) : (
-          /* Outside Station Operational Context */
-          <div className="rounded border border-border bg-surface-1/70 p-3 space-y-2">
-            <div className="flex items-center gap-2 text-fg">
-              <span className="h-2 w-2 rounded-full border border-fg-subtle bg-transparent" />
-              <span className="font-semibold text-xs">Outside Primary Network</span>
-            </div>
-            <p className="text-[11px] text-fg-subtle leading-relaxed">
-              This station monitors a secondary or standalone catchment basin ({staticStation.basin}). It operates independently and does not form part of the 25-node Bengawan Solo primary connected tree.
-            </p>
-            <div className="text-[10px] text-fg-muted pt-1 border-t border-border/50">
-              Telemetry status: <strong className="text-ok font-normal">Active telemetry feed</strong>
-            </div>
-          </div>
-        )}
-
-        {/* Model Strategy & Configuration */}
-        <div className="rounded border border-border bg-surface-1/60 p-2.5 space-y-1.5 text-[11px]">
-          <div className="text-[10px] uppercase text-fg-subtle mb-1">Predictive Architecture</div>
-          <KV k="Strategy" v={STRATEGY_LABEL[staticStation.strategy] ?? staticStation.strategy} />
-          <KV k="Catchment" v={`${staticStation.catchmentKm2} km²`} />
-          <KV k="Basin Role" v={isPrimary ? "Bengawan Solo Core" : "Secondary Basin"} />
         </div>
 
         {/* Forecast Confidence Panel */}
@@ -280,10 +341,10 @@ export function StationInspector({
         {/* Action Links */}
         <div className="flex gap-2 pt-1 font-sans">
           <Link
-            href={`/stations?station=${staticStation.id}`}
+            href={`/explorer?station=${staticStation.id}`}
             className="btn btn-sm flex-1 justify-center text-xs"
           >
-            Station Detail <ArrowRight className="h-3 w-3 ml-1" />
+            Basin Detail <ArrowRight className="h-3 w-3 ml-1" />
           </Link>
           <Link
             href={`/forecasts?station=${staticStation.id}`}

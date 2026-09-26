@@ -1,38 +1,58 @@
-import type { StaticStation, StaticEdge } from "@/data/network-static";
-import type { StationSnapshot, StationDetail } from "@/types/domain";
+import type { StaticBasinNode, StaticEdge } from "@/data/network-static";
+import type { StationSnapshot, StationDetail, RiskLevel } from "@/types/domain";
 
-export type NetworkFilterMode = "ALL" | "PRIMARY" | "OUTSIDE";
+export type NetworkFilterMode = "ALL" | "HEADWATERS" | "MAINSTEM" | "COLD_START";
+
+export type NetworkOverlayMode = "RISK" | "SUPPLY" | "WITHDRAWAL" | "GNN_INFLUENCE";
+
+export type HopDirection = "UPSTREAM" | "DOWNSTREAM" | "BOTH";
 
 export interface NetworkLayerState {
   rivers: boolean;
-  primaryStations: boolean;
-  outsideStations: boolean;
+  basins: boolean;
   networkEdges: boolean;
-  provinces: boolean;
-  basin: boolean;
   flowDirection: boolean;
   labels: boolean;
+  hopDistance: 1 | 2 | 3;
+  hopDirection: HopDirection;
+  overlay: NetworkOverlayMode;
+  // Compatibility fields
+  primaryStations?: boolean;
+  outsideStations?: boolean;
+  provinces?: boolean;
+  basin?: boolean;
 }
 
 export const DEFAULT_NETWORK_LAYERS: NetworkLayerState = {
   rivers: true,
-  primaryStations: true,
-  outsideStations: true,
+  basins: true,
   networkEdges: true,
-  provinces: true,
-  basin: true,
   flowDirection: true,
   labels: true,
+  hopDistance: 3,
+  hopDirection: "BOTH",
+  overlay: "RISK",
+  primaryStations: true,
+  outsideStations: true,
+  provinces: false,
+  basin: true,
 };
 
 export interface StationHoverInfo {
   id: string;
   name: string;
   category: string;
-  risk: string;
-  tma: number;
+  risk: RiskLevel;
+  riskScore: number;
+  supply: number;
+  climatologyAnomalySigma: number;
+  withdrawal: number;
+  waterLimitationProxy: number;
+  graphDepth: number;
+  coldStart: boolean;
   river: string;
-  primary: boolean;
   x: number;
   y: number;
+  tma?: number; // compatibility
+  primary?: boolean;
 }

@@ -4,15 +4,15 @@ import "./globals.css";
 import { Providers } from "@/components/layout/app-shell";
 
 export const metadata: Metadata = {
-  title: "ANCHOR · Hydrological Intelligence Platform",
-  description: "AI-powered river water-level forecasting and flood intelligence for the Bengawan Solo watershed.",
+  title: "TIRTA · Topology-Informed River Transmission Alert",
+  description: "AI-powered early-warning and river-basin intelligence platform for next-month water-stress risk across interconnected HUC12 sub-basins.",
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
 const themeScript = `
   try {
-    const raw = localStorage.getItem('anchor-ui');
+    const raw = localStorage.getItem('tirta-ui') || localStorage.getItem('anchor-ui');
     let theme = 'dark';
     if (raw) {
       const parsed = JSON.parse(raw);

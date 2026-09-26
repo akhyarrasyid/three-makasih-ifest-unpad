@@ -1,142 +1,339 @@
 "use client";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Play, Loader2 } from "lucide-react";
+import { Play, Loader2, ArrowRight, Droplets, GitFork, ShieldCheck, Compass, AlertTriangle } from "lucide-react";
 import { useForecast, useHistory, useRunForecast, useStation } from "@/hooks/use-api";
 import { useSelectionStore } from "@/store/selection-store";
-import { PageHeader, Panel, Segmented, ChartSkeleton, ErrorState, Chip, KV, RiskBadge, StationBadge, Dialog } from "@/components/ui/primitives";
-import { TimeSeriesChart, MetricLineChart, CHART_COLORS } from "@/components/charts/charts";
-import { mergeSeries, gapsFrom, ConfidencePanel, RoutingDiagram } from "@/features/stations/station-panel";
+import {
+  PageHeader,
+  Panel,
+  Segmented,
+  ChartSkeleton,
+  ErrorState,
+  Chip,
+  KV,
+  RiskBadge,
+  StationBadge,
+  Dialog,
+} from "@/components/ui/primitives";
+import { MetricLineChart, CHART_COLORS } from "@/components/charts/charts";
+import { ConfidencePanel, RoutingDiagram } from "@/features/stations/station-panel";
 import { InferenceTrace } from "@/features/inference/trace-view";
-import { STATIONS, STATION_MAP, STRATEGY_LABEL, CATEGORY_LABEL } from "@/mock/stations";
-import { MODEL } from "@/config/constants";
-import { fmtTime } from "@/lib/format";
-import { FORECAST_HORIZONS, type ForecastHorizon } from "@/types/domain";
+import { STATIONS } from "@/mock/stations";
+import { STATIC_STATION_MAP, getUpstream1Hop, getUpstream2Hop, getUpstream3Hop } from "@/data/network-static";
+import { MODEL, SCORES } from "@/config/constants";
 import type { InferenceRequest } from "@/types/domain";
-
 
 function ForecastsInner() {
   const params = useSearchParams();
   const selected = useSelectionStore((s) => s.selectedStationId);
   const selectStation = useSelectionStore((s) => s.selectStation);
-  const horizon = useSelectionStore((s) => s.horizon);
-  const setHorizon = useSelectionStore((s) => s.setHorizon);
-  const [anchorOffset, setAnchorOffset] = useState(0);
-  const [modelVersion, setModelVersion] = useState<string>(MODEL.productionVersion);
-  const [scenario, setScenario] = useState<"baseline" | "rain+20" | "upstream-release">("baseline");
+  const [modelKey, setModelKey] = useState<string>("tirta-gbdt-ensemble-v1");
   const [trace, setTrace] = useState<InferenceRequest | null>(null);
 
   useEffect(() => {
     const st = params.get("station");
-    if (st && STATION_MAP[st]) selectStation(st);
+    if (st && STATIC_STATION_MAP[st]) selectStation(st);
   }, [params, selectStation]);
 
   const station = useStation(selected);
-  const history = useHistory(selected, 72, 30);
-  const forecast = useForecast(selected, anchorOffset);
+  const history = useHistory(selected, 12, 1);
+  const forecast = useForecast(selected);
   const run = useRunForecast();
 
-  const scenarioFactor = scenario === "baseline" ? 1 : scenario === "rain+20" ? 1.12 : 1.06;
-  const points = useMemo(() => (forecast.data?.points ?? []).map((p) => ({ ...p, predicted: p.predicted * scenarioFactor, upper: p.upper * scenarioFactor, lower: p.lower * scenarioFactor })), [forecast.data, scenarioFactor]);
-  const visiblePoints = useMemo(() => points.filter((p) => p.horizon <= horizon), [points, horizon]);
-  const series = useMemo(() => mergeSeries(history.data?.points?.filter((p) => !forecast.data || p.t <= forecast.data.anchor), visiblePoints), [history.data, visiblePoints, forecast.data]);
-  const gaps = useMemo(() => gapsFrom(history.data?.points), [history.data]);
-  const st = STATION_MAP[selected];
-  const heads = FORECAST_HORIZONS.map((h) => points[h - 1]).filter(Boolean);
-  const horizonError = FORECAST_HORIZONS.map((h) => ({ h: `${h}h`, sigma: heads.find((p) => p.horizon === h) ? Number((((heads.find((p) => p.horizon === h)!.upper - heads.find((p) => p.horizon === h)!.lower) / 2 / 1.645)).toFixed(3)) : 0, recursive: Number((0.05 + 0.035 * h ** 0.85).toFixed(3)) }));
+  const st = STATIC_STATION_MAP[selected];
+  const snap = station.data;
+
+  const up1 = getUpstream1Hop(selected);
+  const up2 = getUpstream2Hop(selected);
+  const up3 = getUpstream3Hop(selected);
+  const totalUpstreamCount = up1.length + up2.length + up3.length;
+
+  const historyPoints = history.data?.points ?? [];
+  const chartData = useMemo(() => {
+    return historyPoints.map((p, idx) => {
+      const isLast = idx === historyPoints.length - 1;
+      return {
+        month: p.monthName,
+        actual: p.supply,
+        climatology: p.climatology,
+        forecast: isLast && forecast.data ? forecast.data.predictedSupply : null,
+      };
+    });
+  }, [historyPoints, forecast.data]);
 
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Forecast Intelligence"
-        subtitle="Direct multi-horizon water-level forecasts with spatial graph reconciliation. Every horizon is predicted from a common anchor — predictions are never fed back into the model."
+        title="Next-Month Water-Stress Forecast"
+        subtitle="Forecasting next-month water-stress risk P(stress at t+1) using historical water budgets, climatology anomalies, and directed river reachability."
         actions={
-          <button className="btn btn-primary" onClick={() => run.mutate(selected, { onSuccess: (r) => setTrace(r.request) })} disabled={run.isPending}>
-            {run.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Run forecast
+          <button
+            className="btn btn-primary font-mono text-xs flex items-center gap-1.5"
+            onClick={() =>
+              run.mutate(selected, {
+                onSuccess: (r) => setTrace(r.request),
+              })
+            }
+            disabled={run.isPending}
+          >
+            {run.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Play className="h-3.5 w-3.5" />
+            )}
+            Run inference
           </button>
         }
       />
 
-      <div className="panel flex flex-wrap items-center gap-2 px-3 py-2">
-        <label className="t-caption">Station</label>
-        <select className="input" value={selected} onChange={(e) => selectStation(e.target.value)} aria-label="Station">
-          {STATIONS.map((s) => <option key={s.id} value={s.id}>{s.name} · {CATEGORY_LABEL[s.category]}</option>)}
+      {/* Control Selector Bar */}
+      <div className="panel flex flex-wrap items-center gap-2.5 px-3 py-2 text-xs font-mono">
+        <label className="text-fg-subtle uppercase text-[10px]">Sub-Basin</label>
+        <select
+          className="input font-mono text-xs"
+          value={selected}
+          onChange={(e) => selectStation(e.target.value)}
+          aria-label="Select HUC12 Sub-Basin"
+        >
+          {STATIONS.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name} ({s.id})
+            </option>
+          ))}
         </select>
-        <label className="t-caption ml-2">Horizon</label>
-        <Segmented<ForecastHorizon> ariaLabel="Forecast horizon" options={FORECAST_HORIZONS.map((h) => ({ value: h, label: `${h}h` }))} value={horizon} onChange={setHorizon} />
-        <label className="t-caption ml-2">Model</label>
-        <select className="input" value={modelVersion} onChange={(e) => setModelVersion(e.target.value)} aria-label="Model version">
-          <option>anchor-prod-v2.4.1</option>
-          <option>anchor-stg-v2.4.2</option>
-          <option>anchor-cand-v2.5.0-rc1</option>
+
+        <label className="text-fg-subtle uppercase text-[10px] ml-2">Model</label>
+        <select
+          className="input font-mono text-xs"
+          value={modelKey}
+          onChange={(e) => setModelKey(e.target.value)}
+          aria-label="Select Model"
+        >
+          <option value="tirta-gbdt-ensemble-v1">tirta-gbdt-ensemble-v1 (AP 0.7608 · Candidate)</option>
+          <option value="tirta-graph-catboost-v1">tirta-graph-catboost-v1 (AP 0.7590 · Validated)</option>
+          <option value="tirta-directed-gnn-v1">tirta-directed-gnn-v1 (AP 0.7641 · Research)</option>
+          <option value="tirta-tabular-baseline-v1">tirta-tabular-baseline-v1 (AP 0.7329 · Verified Public)</option>
         </select>
-        <label className="t-caption ml-2">Run</label>
-        <Segmented ariaLabel="Run anchor" options={[{ value: 0, label: "Latest" }, { value: 6, label: "t₀ − 6h" }, { value: 12, label: "t₀ − 12h" }, { value: 24, label: "t₀ − 24h" }]} value={anchorOffset} onChange={setAnchorOffset} />
-        <label className="t-caption ml-2">Scenario</label>
-        <select className="input" value={scenario} onChange={(e) => setScenario(e.target.value as typeof scenario)} aria-label="Scenario">
-          <option value="baseline">Baseline</option>
-          <option value="rain+20">Rainfall +20%</option>
-          <option value="upstream-release">Upstream release</option>
-        </select>
+
+        <div className="ml-auto flex items-center gap-1.5">
+          <Chip tone="water">Month t → t+1</Chip>
+          {st?.coldStart ? (
+            <Chip tone="warn">Cold-Start Holdout</Chip>
+          ) : (
+            <Chip tone="ok">Connected Lineage</Chip>
+          )}
+        </div>
       </div>
 
+      {/* 4-Step Causal Progression Card per Prompt Section 19 */}
+      <div className="panel p-4 bg-surface-1 border border-border">
+        <div className="text-xs font-semibold uppercase tracking-wider text-fg mb-3 flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <Droplets className="h-3.5 w-3.5 text-water" /> Causal Prediction Flow
+          </span>
+          <span className="font-mono text-[10px] text-fg-subtle">
+            HUC12: {st?.name ?? selected}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 font-mono text-xs">
+          {/* Step 1: Current Condition */}
+          <div className="p-3 rounded border border-border bg-surface-0 space-y-1">
+            <span className="text-[10px] uppercase text-cyan-400 font-semibold block">
+              1. Current Condition
+            </span>
+            <div className="text-sm font-bold text-fg">
+              {snap?.currentSupply.toFixed(1) ?? "—"} m³/s
+            </div>
+            <div className="text-[11px] text-fg-subtle">
+              Supply: {st?.coldStart ? "48th" : "61st"} percentile
+            </div>
+            <div className="text-[10px] text-fg-faint">
+              Withdrawal: {snap?.totalWithdrawal.toFixed(1) ?? "—"} m³/s
+            </div>
+          </div>
+
+          {/* Step 2: Historical Context */}
+          <div className="p-3 rounded border border-border bg-surface-0 space-y-1">
+            <span className="text-[10px] uppercase text-blue-400 font-semibold block">
+              2. Historical Context
+            </span>
+            <div className="text-sm font-bold text-fg">
+              {snap ? (snap.climatologyAnomalySigma >= 0 ? "+" : "") + snap.climatologyAnomalySigma.toFixed(2) + "σ" : "—"}
+            </div>
+            <div className="text-[11px] text-fg-subtle">
+              vs 14-year climatology
+            </div>
+            <div className="text-[10px] text-fg-faint">
+              SUI-like proxy: {snap?.waterLimitationProxy.toFixed(2) ?? "—"}
+            </div>
+          </div>
+
+          {/* Step 3: Upstream Context */}
+          <div className="p-3 rounded border border-border bg-surface-0 space-y-1">
+            <span className="text-[10px] uppercase text-purple-400 font-semibold block">
+              3. Upstream Context
+            </span>
+            <div className="text-sm font-bold text-fg">
+              {totalUpstreamCount === 0 ? "Headwater" : `${totalUpstreamCount} Reachable`}
+            </div>
+            <div className="text-[11px] text-fg-subtle">
+              Upstream stress: {totalUpstreamCount > 2 ? "High (deficit)" : "Moderate"}
+            </div>
+            <div className="text-[10px] text-fg-faint">
+              1-3 hop DAG propagation
+            </div>
+          </div>
+
+          {/* Step 4: Next-Month Probability */}
+          <div className="p-3 rounded border border-water/40 bg-water/10 space-y-1">
+            <span className="text-[10px] uppercase text-water font-semibold block">
+              4. Next-Month Probability
+            </span>
+            <div className="text-xl font-bold text-fg">
+              {snap ? `${(snap.riskScore * 100).toFixed(1)}%` : "—"}
+            </div>
+            <div className="text-[11px] text-fg font-medium">
+              Tier: <span className="text-water uppercase">{snap?.risk ?? "LOW"}</span>
+            </div>
+            <div className="text-[10px] text-fg-subtle">
+              Confidence: {snap ? `${(snap.confidenceScore * 100).toFixed(0)}%` : "—"}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 text-[11px] font-mono text-fg-subtle italic border-t border-border/60 pt-2">
+          Risk tier is a demonstration interpretation of the continuous model probability.
+        </div>
+      </div>
+
+      {/* Main Trajectory Chart & Model Explanation */}
       <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
         <Panel
-          title={`${st.name} · forecast trajectory`}
-          subtitle={forecast.data ? `Anchor t₀ = ${fmtTime(forecast.data.anchor)} WIB · ${anchorOffset > 0 ? "back-test run with realised observations" : "latest operational run"} · ${scenario !== "baseline" ? `scenario: ${scenario}` : "baseline"}` : undefined}
-          actions={<div className="flex items-center gap-1.5"><RiskBadge risk={station.data?.risk ?? "LOW"} /><StationBadge category={st.category} /></div>}
+          title={`${st?.name ?? selected} · Monthly Hydrological Trajectory`}
+          subtitle="Observed monthly supply vs. 14-year seasonal climatology baseline and next-month forecast step"
+          actions={
+            <div className="flex items-center gap-1.5">
+              <RiskBadge risk={snap?.risk ?? "LOW"} />
+              <StationBadge category={st?.category ?? "TRIBUTARY"} />
+            </div>
+          }
         >
           {forecast.isError ? (
-            <ErrorState error={forecast.error} onRetry={() => forecast.refetch()} title="Forecast service temporarily unavailable" />
+            <ErrorState
+              error={forecast.error}
+              onRetry={() => forecast.refetch()}
+              title="Forecast service unavailable"
+            />
           ) : forecast.isLoading || history.isLoading ? (
             <ChartSkeleton height={380} />
           ) : (
-            <TimeSeriesChart data={series} thresholds={st.thresholds} height={380} showClimatology anchor={forecast.data?.anchor} gaps={gaps} showBrush />
+            <MetricLineChart
+              data={chartData}
+              series={[
+                {
+                  key: "climatology",
+                  name: "Seasonal Normal (Climatology)",
+                  color: CHART_COLORS.band,
+                  dashed: true,
+                },
+                {
+                  key: "actual",
+                  name: "Observed Supply",
+                  color: CHART_COLORS.actual,
+                  area: true,
+                },
+                {
+                  key: "forecast",
+                  name: "Forecast (Month t+1)",
+                  color: CHART_COLORS.forecast,
+                  dashed: true,
+                },
+              ]}
+              xKey="month"
+              unit="m³/s"
+              height={360}
+            />
           )}
-          <div className="mt-4">
-            <div className="t-label mb-2">Direct multi-horizon heads — anchored at t₀</div>
-            <div className="grid grid-cols-4 gap-2 md:grid-cols-7">
-              {heads.map((p) => (
-                <button key={p.horizon} onClick={() => setHorizon(p.horizon as ForecastHorizon)} className={`rounded-md border p-2 text-left transition-colors ${p.horizon <= horizon ? "border-accent-water/40 bg-accent-water/10" : "border-border bg-surface-0 opacity-60"}`} aria-pressed={p.horizon === horizon}>
-                  <div className="t-caption">t₀ + {p.horizon}h</div>
-                  <div className="mono text-sm text-accent-water">{p.predicted.toFixed(2)} m</div>
-                  <div className="t-caption !text-[10px]">[{p.lower.toFixed(2)} – {p.upper.toFixed(2)}]</div>
-                  <div className={`t-caption !text-[10px] ${p.predicted >= st.thresholds.warning ? "!text-[#f5c261]" : ""}`}>{Math.round((p.predicted / st.thresholds.alert) * 100)}% of alert</div>
-                </button>
-              ))}
+
+          {/* Model Attribution Drivers */}
+          {forecast.data && (
+            <div className="mt-4 pt-3 border-t border-border">
+              <div className="text-xs font-semibold uppercase tracking-wider text-fg mb-2">
+                Primary Causal Attribution Drivers
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-xs">
+                {forecast.data.confidence.drivers.map((d, i) => (
+                  <div key={i} className="p-2 rounded border border-border bg-surface-0">
+                    <span className="text-[10px] text-fg-subtle truncate block">{d.label}</span>
+                    <span className="text-sm font-bold text-fg mt-0.5 block">
+                      {(d.contribution * 100).toFixed(0)}%
+                    </span>
+                    <div className="w-full bg-surface-2 rounded-full h-1 mt-1 overflow-hidden">
+                      <div
+                        className="bg-water h-full"
+                        style={{ width: `${d.contribution * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </Panel>
 
+        {/* Model Architecture & Reachability Parameters */}
         <div className="space-y-4">
-          <Panel title="Model explanation" subtitle="How this forecast was produced">
-            <KV k="Station segment" v={<StationBadge category={st.category} />} />
-            <KV k="Forecast strategy" v={STRATEGY_LABEL[st.strategy]} />
-            <KV k="Spatial reconciliation" v={st.primaryNetwork && st.category === "NATURAL" ? <span className="text-ok">Enabled</span> : <span className="text-fg-subtle">Not applied</span>} />
-            <KV k="Model ensemble" v={st.category === "DAM_WEIR" ? "Climatology" : MODEL.ensemble.join(" + ")} />
-            <KV k="Model version" v={modelVersion} mono />
-            <KV k="Horizons" v="1h · 3h · 6h · 12h · 24h · 48h · 72h" mono />
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              <Chip tone="water">Direct MH</Chip>
-              {st.primaryNetwork && <Chip tone="water">Residual graph</Chip>}
-              <Chip>{st.upstreamStations.length} upstream</Chip>
-              <Chip>{st.downstreamStations.length} downstream</Chip>
+          <Panel title="Model Architecture" subtitle="Active configuration for this sub-basin">
+            <KV k="Active Model" v={modelKey} mono />
+            <KV k="Spatial Unit" v="HUC12 Sub-Basin" />
+            <KV k="DAG Depth" v={`Level ${st?.graphDepth ?? 1}`} mono />
+            <KV
+              k="Cold Start"
+              v={
+                st?.coldStart ? (
+                  <span className="text-amber-400 font-semibold">Yes (Spatial Holdout)</span>
+                ) : (
+                  <span className="text-emerald-400">No (Historical Lineage)</span>
+                )
+              }
+            />
+            <KV k="Forecast Horizon" v="Next Month (t+1)" mono />
+            <KV k="Primary Evaluation" v="PR-AUC / Average Precision" />
+            <div className="mt-3 flex flex-wrap gap-1.5 font-mono text-[10px]">
+              <Chip tone="water">Directed Reachability</Chip>
+              <Chip>{up1.length} 1-hop up</Chip>
+              <Chip>{up2.length} 2-hop up</Chip>
+              <Chip>{up3.length} 3-hop up</Chip>
+              <Chip>{st?.downstreamStationId ? "1 downstream" : "Outlet"}</Chip>
             </div>
           </Panel>
+
           {forecast.data && <ConfidencePanel confidence={forecast.data.confidence} />}
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Panel title="Uncertainty growth by horizon" subtitle="Forecast σ (metres) for this station vs. an equivalent recursive strategy — direct heads avoid compounding error">
-          <MetricLineChart data={horizonError} xKey="h" series={[{ key: "sigma", name: "Direct multi-horizon σ", color: CHART_COLORS.forecast, area: true }, { key: "recursive", name: "Recursive σ (reference)", color: CHART_COLORS.climatology, dashed: true }]} unit="m" height={220} />
-        </Panel>
-        <Panel title="Forecast routing" subtitle="Segment-dependent pipeline for the selected station">
-          {forecast.data ? <RoutingDiagram steps={forecast.data.routing} horizontal /> : <ChartSkeleton height={120} />}
-        </Panel>
-      </div>
+      {/* Forecast Routing Diagram */}
+      <Panel
+        title="Directed River Forecast Routing Pipeline"
+        subtitle="End-to-end transformation from raw water budget to directed reachability and continuous probability"
+      >
+        {forecast.data ? (
+          <RoutingDiagram steps={forecast.data.routing} horizontal />
+        ) : (
+          <ChartSkeleton height={120} />
+        )}
+      </Panel>
 
-      <Dialog open={!!trace} onClose={() => setTrace(null)} title="Forecast run completed" description="On-demand inference request recorded in the audit trail" width="max-w-2xl">
+      {/* Inference Trace Dialog */}
+      <Dialog
+        open={Boolean(trace)}
+        onClose={() => setTrace(null)}
+        title="TIRTA Inference Control Plane Trace"
+        description="Recorded execution waterfall across hydrology processing, directed reachability, and model inference"
+        width="max-w-2xl"
+      >
         {trace && <InferenceTrace request={trace} />}
       </Dialog>
     </div>

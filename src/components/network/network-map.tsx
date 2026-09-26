@@ -6,10 +6,10 @@ import {
   STATIC_EDGES,
   STATIC_RIVERS,
   STATIC_BASEMAP,
-  type StaticStation,
+  type StaticBasinNode,
   type StaticEdge,
 } from "@/data/network-static";
-import type { NetworkFilterMode, NetworkLayerState, StationHoverInfo } from "./network-types";
+import type { NetworkFilterMode, NetworkLayerState, StationHoverInfo, NetworkOverlayMode } from "./network-types";
 import type { StationSnapshot } from "@/types/domain";
 import { useUiStore } from "@/store/ui-store";
 import { RISK_STYLES } from "@/components/ui/primitives";
@@ -51,7 +51,7 @@ export function NetworkMap({
   // Pan & Zoom viewport state
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
   const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
+  const dragStartRef = useRef({ x: 0, y: 0, vx: view.x, vy: view.y });
 
   // Floating hover card state
   const [hoveredStation, setHoveredStation] = useState<StationHoverInfo | null>(null);
@@ -69,18 +69,11 @@ export function NetworkMap({
     return true;
   }, [theme]);
 
-  // Merge live telemetry snapshot from API with static station models
-  const liveStationMap = useMemo(() => {
-    const map = new Map<string, { currentTma: number; risk: string; forecast6h: number; forecast24h: number }>();
+  // Live telemetry map indexed by HUC ID
+  const liveMap = useMemo(() => {
+    const map = new Map<string, StationSnapshot>();
     if (nodes && nodes.length > 0) {
-      nodes.forEach((n) => {
-        map.set(n.station.id, {
-          currentTma: n.currentTma,
-          risk: n.risk,
-          forecast6h: n.forecast6h,
-          forecast24h: n.forecast24h,
-        });
-      });
+      nodes.forEach((n) => map.set(n.station.id, n));
     }
     return map;
   }, [nodes]);
@@ -90,25 +83,25 @@ export function NetworkMap({
   const descendantSet = useMemo(() => new Set(descendantIds), [descendantIds]);
   const isAnySelected = Boolean(selectedId);
 
-  // Filter stations based on filterMode
+  // Filter basins based on filterMode
   const visibleStations = useMemo(() => {
-    if (filterMode === "PRIMARY") {
-      return STATIC_STATIONS.filter((s) => s.primary);
+    if (filterMode === "HEADWATERS") {
+      return STATIC_STATIONS.filter((s) => s.category === "HEADWATER");
     }
-    if (filterMode === "OUTSIDE") {
-      return STATIC_STATIONS.filter((s) => !s.primary);
+    if (filterMode === "MAINSTEM") {
+      return STATIC_STATIONS.filter((s) => s.category === "MAINSTEM");
     }
-    // "ALL": Show all 30 stations
+    if (filterMode === "COLD_START") {
+      return STATIC_STATIONS.filter((s) => s.coldStart);
+    }
     return STATIC_STATIONS;
   }, [filterMode]);
 
-  // Edges are visible in ALL and PRIMARY modes (0 edges in OUTSIDE mode)
+  // Edges are visible when networkEdges layer is on
   const visibleEdges = useMemo(() => {
-    if (filterMode === "OUTSIDE" || !layers.networkEdges) {
-      return [];
-    }
+    if (!layers.networkEdges) return [];
     return STATIC_EDGES;
-  }, [filterMode, layers.networkEdges]);
+  }, [layers.networkEdges]);
 
   // Expose camera controls via onMapReady
   useEffect(() => {
@@ -121,9 +114,9 @@ export function NetworkMap({
     }
   }, [onMapReady]);
 
-  // Mouse pan event handlers
+  // Mouse pan handlers
   const handleMouseDown = (e: MouseEvent) => {
-    if (e.button !== 0) return; // Only left click
+    if (e.button !== 0) return;
     setIsDragging(true);
     dragStartRef.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
   };
@@ -143,7 +136,6 @@ export function NetworkMap({
     setIsDragging(false);
   };
 
-  // Wheel zoom
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.12 : 0.89;
@@ -152,6 +144,35 @@ export function NetworkMap({
       k: Math.min(Math.max(prev.k * factor, 0.6), 5),
     }));
   }, []);
+
+  // Compute node fill color depending on overlay mode
+  const getNodeColor = useCallback(
+    (st: StaticBasinNode, snap?: StationSnapshot) => {
+      const overlay = layers.overlay ?? "RISK";
+      const risk = snap?.risk ?? st.risk;
+      const supplyRatio = snap ? snap.currentSupply / Math.max(1, snap.climatology) : st.supplyRatio;
+      const totalWithdrawal = snap?.totalWithdrawal ?? st.totalWithdrawal;
+
+      if (overlay === "RISK") {
+        return RISK_STYLES[risk]?.hex ?? "#22c55e";
+      }
+      if (overlay === "SUPPLY") {
+        if (supplyRatio < 0.6) return "#f59e0b"; // deficit
+        if (supplyRatio < 0.85) return "#38bdf8"; // moderate
+        return "#0284c7"; // robust supply
+      }
+      if (overlay === "WITHDRAWAL") {
+        if (totalWithdrawal > 45) return "#ef4444"; // extreme withdrawal
+        if (totalWithdrawal > 25) return "#f97316"; // elevated
+        return "#10b981"; // sustainable
+      }
+      if (overlay === "GNN_INFLUENCE") {
+        return "#a855f7"; // learned GNN propagation
+      }
+      return "#38bdf8";
+    },
+    [layers.overlay]
+  );
 
   return (
     <div
@@ -181,7 +202,7 @@ export function NetworkMap({
         }}
       >
         <defs>
-          {/* Subtle Precision Cartographic Grid */}
+          {/* Precision Cartographic Grid */}
           <pattern id="carto-grid" width="40" height="40" patternUnits="userSpaceOnUse">
             <path
               d="M 40 0 L 0 0 0 40"
@@ -191,7 +212,7 @@ export function NetworkMap({
             />
           </pattern>
 
-          {/* Upstream -> Downstream Directional Flow Marker */}
+          {/* Directed DAG Flow Arrowhead (Physical id → to_id) */}
           <marker
             id="flow-arrow-dir"
             viewBox="0 0 8 8"
@@ -225,33 +246,7 @@ export function NetworkMap({
         {/* 1. Background Grid */}
         <rect width={W} height={H} fill="url(#carto-grid)" />
 
-        {/* 2. Java Landmass Contour (Geographic Context) */}
-        {layers.provinces && (
-          <g id="layer-java-land">
-            <path
-              d={STATIC_BASEMAP.javaPath}
-              fill={isDark ? "#10161f" : "#edf2f7"}
-              stroke={isDark ? "#1e2836" : "#cbd5e1"}
-              strokeWidth="1.25"
-            />
-          </g>
-        )}
-
-        {/* 3. Provincial Boundary (Central Java / East Java) */}
-        {layers.provinces && (
-          <g id="layer-provinces">
-            <path
-              d={STATIC_BASEMAP.provincesPath}
-              fill="none"
-              stroke={isDark ? "#334155" : "#94a3b8"}
-              strokeWidth="1.2"
-              strokeDasharray="4 4"
-              strokeOpacity="0.75"
-            />
-          </g>
-        )}
-
-        {/* 4. Bengawan Solo Watershed Basin Catchment Outline */}
+        {/* 2. Watershed Basin Catchment Outline */}
         {layers.basin && (
           <g id="layer-basin">
             <path
@@ -266,7 +261,7 @@ export function NetworkMap({
           </g>
         )}
 
-        {/* 5. Natural River Hydrography (Geographic Backbone) */}
+        {/* 3. Natural River Hydrography (Drainage Corridors) */}
         {layers.rivers && (
           <g id="layer-rivers">
             {STATIC_RIVERS.map((r) => {
@@ -287,19 +282,20 @@ export function NetworkMap({
           </g>
         )}
 
-        {/* 6. Primary Hydrological Network Links (24 Edges Connecting 25 Primary Nodes) */}
+        {/* 4. Directed DAG Edges (41 Edges Connecting HUC12 Sub-Basins) */}
         {visibleEdges.length > 0 && (
           <g id="layer-network-edges">
             {visibleEdges.map((edge) => {
-              // Highlighting logic when a station is selected
               let isEdgeActive = false;
               let isEdgeDimmed = false;
 
               if (isAnySelected) {
                 const isSourceSelected = edge.source === selectedId;
                 const isTargetSelected = edge.target === selectedId;
-                const isAncestralEdge = ancestorSet.has(edge.source) && (ancestorSet.has(edge.target) || edge.target === selectedId);
-                const isDescendantEdge = descendantSet.has(edge.target) && (descendantSet.has(edge.source) || edge.source === selectedId);
+                const isAncestralEdge =
+                  ancestorSet.has(edge.source) && (ancestorSet.has(edge.target) || edge.target === selectedId);
+                const isDescendantEdge =
+                  descendantSet.has(edge.target) && (descendantSet.has(edge.source) || edge.source === selectedId);
 
                 isEdgeActive = isSourceSelected || isTargetSelected || isAncestralEdge || isDescendantEdge;
                 isEdgeDimmed = !isEdgeActive;
@@ -355,28 +351,28 @@ export function NetworkMap({
           </g>
         )}
 
-        {/* 7. Monitoring Stations (All 30 Stations in Default View) */}
+        {/* 5. Sub-Basin Nodes (42 Representative HUC12 Sub-Basins) */}
         <g id="layer-stations">
           {visibleStations.map((st) => {
             const isSelected = selectedId === st.id;
             const isAncestor = ancestorSet.has(st.id);
             const isDescendant = descendantSet.has(st.id);
 
-            // Opacity when a station is selected
             let opacity = 1.0;
             if (isAnySelected) {
               if (isSelected || isAncestor || isDescendant) {
                 opacity = 1.0;
               } else {
-                opacity = 0.35; // Dimmed but intentionally STILL VISIBLE
+                opacity = 0.35;
               }
             }
 
-            // Real-time telemetry overrides if available
-            const live = liveStationMap.get(st.id);
-            const risk = live?.risk ?? st.risk;
-            const tma = live?.currentTma ?? st.currentTma;
-            const riskColor = RISK_STYLES[risk as keyof typeof RISK_STYLES]?.hex ?? "#22c55e";
+            const snap = liveMap.get(st.id);
+            const risk = snap?.risk ?? st.risk;
+            const riskScore = snap?.riskScore ?? st.riskScore;
+            const supply = snap?.currentSupply ?? st.currentSupply;
+            const withdrawal = snap?.totalWithdrawal ?? st.totalWithdrawal;
+            const nodeFill = getNodeColor(st, snap);
 
             return (
               <g
@@ -395,7 +391,13 @@ export function NetworkMap({
                       name: st.name,
                       category: st.category,
                       risk,
-                      tma,
+                      riskScore,
+                      supply,
+                      climatologyAnomalySigma: snap?.climatologyAnomalySigma ?? st.climatologyAnomalySigma,
+                      withdrawal,
+                      waterLimitationProxy: snap?.waterLimitationProxy ?? st.waterLimitationProxy,
+                      graphDepth: st.graphDepth,
+                      coldStart: st.coldStart,
                       river: st.river,
                       primary: st.primary,
                       x: e.clientX - rect.left,
@@ -405,105 +407,78 @@ export function NetworkMap({
                 }}
                 onMouseLeave={() => setHoveredStation(null)}
               >
-                {/* PRIMARY STATIONS (25 connected stations) */}
-                {st.primary ? (
+                {/* Selected Node Halo */}
+                {isSelected && (
                   <>
-                    {/* Selected Target Pulse Ring */}
-                    {isSelected && (
-                      <>
-                        <circle
-                          cx={st.x}
-                          cy={st.y}
-                          r="13"
-                          fill="none"
-                          stroke="#38bdf8"
-                          strokeWidth="1.8"
-                          strokeDasharray="3 3"
-                        />
-                        <circle
-                          cx={st.x}
-                          cy={st.y}
-                          r="17"
-                          fill="#38bdf8"
-                          fillOpacity="0.12"
-                        />
-                      </>
-                    )}
-
-                    {/* Upstream / Downstream Interaction Halo */}
-                    {(isAncestor || isDescendant) && !isSelected && (
-                      <circle
-                        cx={st.x}
-                        cy={st.y}
-                        r="10"
-                        fill="none"
-                        stroke={isAncestor ? "#38bdf8" : "#34d399"}
-                        strokeWidth="1.5"
-                        strokeDasharray="2 2"
-                        strokeOpacity="0.8"
-                      />
-                    )}
-
-                    {/* Compact Infrastructure Solid Node */}
                     <circle
                       cx={st.x}
                       cy={st.y}
-                      r={isSelected ? 6.5 : 5.2}
-                      fill={riskColor}
-                      stroke={isDark ? "#090d12" : "#ffffff"}
-                      strokeWidth="2.0"
+                      r="14"
+                      fill="none"
+                      stroke="#38bdf8"
+                      strokeWidth="1.8"
+                      strokeDasharray="3 3"
                     />
-
-                    {/* Concentric Center Dot */}
                     <circle
                       cx={st.x}
                       cy={st.y}
-                      r="1.8"
-                      fill={isDark ? "#090d12" : "#ffffff"}
-                    />
-                  </>
-                ) : (
-                  /* OUTSIDE / SECONDARY STATIONS (5 stations - Monitored, Intentionally Unconnected) */
-                  <>
-                    {isSelected && (
-                      <circle
-                        cx={st.x}
-                        cy={st.y}
-                        r="12"
-                        fill="none"
-                        stroke="#94a3b8"
-                        strokeWidth="1.5"
-                        strokeDasharray="3 3"
-                      />
-                    )}
-
-                    {/* Distinct Secondary Outer Ring */}
-                    <circle
-                      cx={st.x}
-                      cy={st.y}
-                      r="5.5"
-                      fill={isDark ? "#1e293b" : "#e2e8f0"}
-                      stroke={isSelected ? "#94a3b8" : isDark ? "#64748b" : "#94a3b8"}
-                      strokeWidth="1.5"
-                      strokeDasharray="2.5 1.5"
-                    />
-
-                    {/* Center Core */}
-                    <circle
-                      cx={st.x}
-                      cy={st.y}
-                      r="2.2"
-                      fill={riskColor}
-                      opacity={isSelected ? 1.0 : 0.75}
+                      r="18"
+                      fill="#38bdf8"
+                      fillOpacity="0.14"
                     />
                   </>
                 )}
 
-                {/* Station Code Label */}
+                {/* Upstream Ancestor Halo (Cyan) / Downstream Descendant Halo (Emerald) */}
+                {(isAncestor || isDescendant) && !isSelected && (
+                  <circle
+                    cx={st.x}
+                    cy={st.y}
+                    r="11"
+                    fill="none"
+                    stroke={isAncestor ? "#38bdf8" : "#34d399"}
+                    strokeWidth="1.6"
+                    strokeDasharray="2 2"
+                    strokeOpacity="0.85"
+                  />
+                )}
+
+                {/* Sub-Basin Node Circle */}
+                <circle
+                  cx={st.x}
+                  cy={st.y}
+                  r={isSelected ? 7.0 : st.coldStart ? 5.8 : 5.2}
+                  fill={nodeFill}
+                  stroke={isDark ? "#090d12" : "#ffffff"}
+                  strokeWidth="2.0"
+                />
+
+                {/* Cold Start Outer Indicator Ring */}
+                {st.coldStart && !isSelected && (
+                  <circle
+                    cx={st.x}
+                    cy={st.y}
+                    r="7.5"
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeWidth="1.2"
+                    strokeDasharray="2 2"
+                  />
+                )}
+
+                {/* Concentric Center Dot */}
+                <circle
+                  cx={st.x}
+                  cy={st.y}
+                  r="1.8"
+                  fill={isDark ? "#090d12" : "#ffffff"}
+                />
+
+                {/* Sub-Basin Identifier Tag */}
                 {layers.labels && (
                   <text
                     x={st.x}
-                    y={st.y + (st.primary ? 14 : 13)}
+                    y={st.y + 14}
                     textAnchor="middle"
                     className={cn(
                       "font-mono text-[9px] pointer-events-none select-none tracking-tight",
@@ -513,11 +488,11 @@ export function NetworkMap({
                         ? "font-medium fill-cyan-400"
                         : isDescendant
                         ? "font-medium fill-emerald-400"
-                        : st.primary
-                        ? isDark
-                          ? "fill-slate-300"
-                          : "fill-slate-700"
-                        : "fill-slate-500"
+                        : st.coldStart
+                        ? "fill-amber-400"
+                        : isDark
+                        ? "fill-slate-300"
+                        : "fill-slate-700"
                     )}
                   >
                     {st.id}
@@ -532,41 +507,55 @@ export function NetworkMap({
       {/* Floating Hover Card Tooltip */}
       {hoveredStation && (
         <div
-          className="pointer-events-none absolute z-30 panel px-3 py-2 shadow-xl bg-surface-0/95 border border-border text-xs min-w-[200px] -translate-x-1/2 -translate-y-full -mt-3"
+          className="pointer-events-none absolute z-30 panel px-3 py-2 shadow-xl bg-surface-0/95 border border-border text-xs min-w-[220px] -translate-x-1/2 -translate-y-full -mt-3"
           style={{ left: hoveredStation.x, top: hoveredStation.y }}
         >
           <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-border/70">
-            <span className="font-semibold text-fg">{hoveredStation.name}</span>
+            <span className="font-semibold text-fg truncate">{hoveredStation.name}</span>
             <span className="font-mono text-[10px] text-fg-subtle">{hoveredStation.id}</span>
           </div>
 
           <div className="mt-1.5 space-y-1 font-mono text-[11px]">
             <div className="flex items-center justify-between text-fg-subtle">
-              <span>Network Role:</span>
-              <span className={hoveredStation.primary ? "text-water font-medium" : "text-fg-subtle"}>
-                {hoveredStation.primary ? "Primary (Connected)" : "Outside Primary Network"}
+              <span>Next-Month Risk:</span>
+              <span
+                className="font-medium font-mono"
+                style={{ color: RISK_STYLES[hoveredStation.risk as keyof typeof RISK_STYLES]?.hex }}
+              >
+                {(hoveredStation.riskScore * 100).toFixed(1)}% ({hoveredStation.risk})
               </span>
             </div>
 
             <div className="flex items-center justify-between text-fg-subtle">
-              <span>Water Level (TMA):</span>
-              <span className="text-fg font-medium">{hoveredStation.tma.toFixed(2)} m</span>
+              <span>Monthly Supply:</span>
+              <span className="text-fg font-medium">{hoveredStation.supply.toFixed(1)} m³/s</span>
             </div>
 
             <div className="flex items-center justify-between text-fg-subtle">
-              <span>River Reach:</span>
-              <span className="text-fg truncate max-w-[110px]">{hoveredStation.river}</span>
+              <span>Withdrawal:</span>
+              <span className="text-fg font-medium">{hoveredStation.withdrawal.toFixed(1)} m³/s</span>
+            </div>
+
+            <div className="flex items-center justify-between text-fg-subtle">
+              <span>Climatology Anomaly:</span>
+              <span className={cn(
+                "font-medium",
+                hoveredStation.climatologyAnomalySigma < 0 ? "text-amber-400" : "text-emerald-400"
+              )}>
+                {hoveredStation.climatologyAnomalySigma >= 0 ? "+" : ""}{hoveredStation.climatologyAnomalySigma.toFixed(2)}σ
+              </span>
             </div>
 
             <div className="flex items-center justify-between pt-0.5 border-t border-border/50 text-fg-subtle">
-              <span>Status:</span>
-              <span
-                className="font-medium"
-                style={{ color: RISK_STYLES[hoveredStation.risk as keyof typeof RISK_STYLES]?.hex }}
-              >
-                {hoveredStation.risk}
-              </span>
+              <span>DAG Depth:</span>
+              <span className="text-cyan-400 font-medium">Level {hoveredStation.graphDepth}</span>
             </div>
+
+            {hoveredStation.coldStart && (
+              <div className="text-[10px] text-amber-400 pt-0.5">
+                ● Cold-Start Spatial Generalization
+              </div>
+            )}
           </div>
         </div>
       )}

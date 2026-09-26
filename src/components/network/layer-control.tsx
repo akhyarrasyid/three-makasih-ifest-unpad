@@ -10,29 +10,28 @@ interface LayerControlProps {
 }
 
 const LAYER_DEFINITIONS: { key: keyof NetworkLayerState; label: string; description: string; badge?: string }[] = [
-  { key: "primaryStations", label: "Primary Stations", description: "25 connected monitoring nodes", badge: "25 Stns" },
-  { key: "outsideStations", label: "Outside Stations", description: "5 monitored sub-basin stations", badge: "5 Stns" },
-  { key: "networkEdges", label: "Primary Network Edges", description: "24 hydrological links along river lines", badge: "24 Links" },
-  { key: "rivers", label: "Bengawan Solo River", description: "Mainstem and major tributaries", badge: "River Backbone" },
-  { key: "flowDirection", label: "Flow Direction Markers", description: "Upstream → downstream flow arrows" },
-  { key: "basin", label: "Catchment Basin", description: "Bengawan Solo watershed (16,100 km²)" },
-  { key: "provinces", label: "Java Context", description: "Java landmass and provincial lines" },
-  { key: "labels", label: "Station Code Tags", description: "BS-001 through BS-030 identifier labels" },
+  { key: "primaryStations", label: "Connected Sub-Basins", description: "36 mainstem & tributary HUC12 nodes", badge: "36 Nodes" },
+  { key: "outsideStations", label: "Peripheral Sub-Basins", description: "6 monitored peripheral sub-basin nodes", badge: "6 Nodes" },
+  { key: "networkEdges", label: "Directed River Edges", description: "41 directed hydrological DAG links (id → to_id)", badge: "41 Edges" },
+  { key: "rivers", label: "River Corridors", description: "Drainage backbone & active river channels", badge: "Hydrography" },
+  { key: "flowDirection", label: "Flow Direction Markers", description: "Physical upstream → downstream flow vectors" },
+  { key: "basin", label: "Watershed Boundary", description: "Regional hydrologic catchment envelope" },
+  { key: "labels", label: "HUC12 Identifier Tags", description: "HUC-DEMO-0001 through HUC-DEMO-0042 labels" },
 ];
 
 export function LayerControl({ layers, onToggle, className }: LayerControlProps) {
   return (
     <div className={cn("p-3 space-y-1.5 min-w-[280px] select-none", className)}>
       <div className="flex items-center justify-between pb-2 border-b border-border/80 font-mono">
-        <span className="text-xs font-semibold text-fg uppercase tracking-wider">Cartographic Layers</span>
+        <span className="text-xs font-semibold text-fg uppercase tracking-wider">Topology Layers</span>
         <span className="text-[10px] text-fg-subtle">
-          {Object.values(layers).filter(Boolean).length} / {Object.keys(layers).length} active
+          {Object.values(layers).filter(Boolean).length} active
         </span>
       </div>
 
       <div className="space-y-1 pt-1 max-h-[340px] overflow-y-auto">
         {LAYER_DEFINITIONS.map((def) => {
-          const isActive = layers[def.key];
+          const isActive = Boolean(layers[def.key]);
           return (
             <button
               key={def.key}

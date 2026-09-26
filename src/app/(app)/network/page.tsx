@@ -1,7 +1,7 @@
 "use client";
 import { Suspense, useEffect, useMemo, useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Compass, GitFork, Droplets, ShieldCheck } from "lucide-react";
 import { useNetwork, useStation } from "@/hooks/use-api";
 import { useSelectionStore } from "@/store/selection-store";
 import {
@@ -13,9 +13,19 @@ import {
   DEFAULT_NETWORK_LAYERS,
   type NetworkFilterMode,
   type NetworkLayerState,
+  type HopDirection,
+  type NetworkOverlayMode,
 } from "@/components/network";
 import { Skeleton, RISK_STYLES } from "@/components/ui/primitives";
-import { STATIC_STATION_MAP, STATIC_STATIONS, STATIC_EDGES } from "@/data/network-static";
+import {
+  STATIC_STATION_MAP,
+  STATIC_STATIONS,
+  STATIC_EDGES,
+  getUpstream1Hop,
+  getUpstream2Hop,
+  getUpstream3Hop,
+  getDownstreamPath,
+} from "@/data/network-static";
 import { cn } from "@/lib/utils";
 
 function NetworkWorkspace() {
@@ -27,7 +37,6 @@ function NetworkWorkspace() {
   const [userClosed, setUserClosed] = useState(false);
   const [filterMode, setFilterMode] = useState<NetworkFilterMode>("ALL");
   const [layers, setLayers] = useState<NetworkLayerState>(DEFAULT_NETWORK_LAYERS);
-  const [timeOffset, setTimeOffset] = useState(0);
 
   const panelOpen = Boolean(selected && !userClosed);
 
@@ -37,7 +46,7 @@ function NetworkWorkspace() {
     fitNetwork: () => void;
   } | null>(null);
 
-  // Sync station from URL query params if present
+  // Sync sub-basin from URL query params
   useEffect(() => {
     const st = params.get("station");
     if (st && STATIC_STATION_MAP[st] && selected !== st) {
@@ -45,37 +54,31 @@ function NetworkWorkspace() {
     }
   }, [params, selectStation, selected]);
 
-  // Fetch real-time detail only if inspector panel is open and a station is selected
+  // Real-time detail for selected sub-basin
   const detail = useStation(panelOpen && selected ? selected : null);
 
-  // Transitive upstream ancestors and downstream descendants (O(1) static lookup)
+  // Upstream ancestors and downstream descendants based on hop distance and direction
   const ancestors = useMemo(() => {
     if (!selected) return [];
-    return STATIC_STATION_MAP[selected]?.ancestors ?? network.data?.ancestors[selected] ?? [];
-  }, [selected, network.data]);
+    if (layers.hopDirection === "DOWNSTREAM") return [];
+    if (layers.hopDistance === 1) return getUpstream1Hop(selected);
+    if (layers.hopDistance === 2) return [...getUpstream1Hop(selected), ...getUpstream2Hop(selected)];
+    return [...getUpstream1Hop(selected), ...getUpstream2Hop(selected), ...getUpstream3Hop(selected)];
+  }, [selected, layers.hopDistance, layers.hopDirection]);
 
   const descendants = useMemo(() => {
     if (!selected) return [];
-    return STATIC_STATION_MAP[selected]?.descendants ?? network.data?.descendants[selected] ?? [];
-  }, [selected, network.data]);
+    if (layers.hopDirection === "UPSTREAM") return [];
+    const path = getDownstreamPath(selected);
+    if (layers.hopDistance === 1) return path.slice(0, 1);
+    if (layers.hopDistance === 2) return path.slice(0, 2);
+    return path;
+  }, [selected, layers.hopDistance, layers.hopDirection]);
 
-  // Forecast time slider node projections
-  const projectedNodes = useMemo(() => {
-    if (!network.data?.nodes) return [];
-    if (timeOffset === 0) return network.data.nodes;
-    return network.data.nodes.map((n) => {
-      const f = timeOffset <= 6 ? n.forecast6h : n.forecast24h;
-      const ratio = f / n.station.thresholds.alert;
-      const risk =
-        ratio >= 1.0 ? "CRITICAL" : ratio >= 0.8 ? "HIGH" : ratio >= 0.6 ? "MODERATE" : "LOW";
-      return { ...n, currentTma: f, risk } as typeof n;
-    });
-  }, [network.data, timeOffset]);
-
-  // Directed edges connected to the selected station
+  // Directed edges connected to the selected sub-basin
   const edgesIn = useMemo(() => {
     if (!selected) return [];
-    return (network.data?.edges ?? STATIC_EDGES.map(e => ({
+    return (network.data?.edges ?? STATIC_EDGES.map((e) => ({
       id: e.id,
       from: e.source,
       to: e.target,
@@ -89,7 +92,7 @@ function NetworkWorkspace() {
 
   const edgesOut = useMemo(() => {
     if (!selected) return [];
-    return (network.data?.edges ?? STATIC_EDGES.map(e => ({
+    return (network.data?.edges ?? STATIC_EDGES.map((e) => ({
       id: e.id,
       from: e.source,
       to: e.target,
@@ -101,25 +104,29 @@ function NetworkWorkspace() {
     }))).filter((e) => e.from === selected);
   }, [network.data, selected]);
 
-  // Layer toggle handler
+  // Control handlers
   const handleToggleLayer = (layerKey: keyof NetworkLayerState) => {
     setLayers((prev) => ({ ...prev, [layerKey]: !prev[layerKey] }));
   };
 
+  const handleSetHopDistance = (hops: 1 | 2 | 3) => {
+    setLayers((prev) => ({ ...prev, hopDistance: hops }));
+  };
+
+  const handleSetHopDirection = (dir: HopDirection) => {
+    setLayers((prev) => ({ ...prev, hopDirection: dir }));
+  };
+
+  const handleSetOverlay = (mode: NetworkOverlayMode) => {
+    setLayers((prev) => ({ ...prev, overlay: mode }));
+  };
+
   // Viewport camera actions
-  const handleZoomIn = () => {
-    cameraRef.current?.zoomIn();
-  };
+  const handleZoomIn = () => cameraRef.current?.zoomIn();
+  const handleZoomOut = () => cameraRef.current?.zoomOut();
+  const handleFitNetwork = () => cameraRef.current?.fitNetwork();
 
-  const handleZoomOut = () => {
-    cameraRef.current?.zoomOut();
-  };
-
-  const handleFitNetwork = () => {
-    cameraRef.current?.fitNetwork();
-  };
-
-  // Station selection handler
+  // Selection handlers
   const handleStationSelect = (id: string) => {
     selectStation(id);
     setUserClosed(false);
@@ -130,15 +137,13 @@ function NetworkWorkspace() {
     setUserClosed(false);
   };
 
-  const handleClosePanel = () => {
-    setUserClosed(true);
-  };
+  const selectedNode = selected ? STATIC_STATION_MAP[selected] : null;
 
   return (
     <div className="relative -m-4 md:-m-6 h-[calc(100vh-3.5rem)] w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] overflow-hidden bg-surface-0">
       {/* 1. Fast, Pure SVG Workspace: The Map IS the Workspace */}
       <NetworkMap
-        nodes={projectedNodes}
+        nodes={network.data?.nodes ?? []}
         selectedId={selected}
         onSelect={handleStationSelect}
         filterMode={filterMode}
@@ -167,7 +172,7 @@ function NetworkWorkspace() {
       <div
         className={cn(
           "absolute top-4 z-20 pointer-events-auto transition-all duration-300",
-          panelOpen && selected ? "right-4 lg:right-[406px]" : "right-4"
+          panelOpen && selected ? "right-4 lg:right-[416px]" : "right-4"
         )}
       >
         <NetworkControls
@@ -176,6 +181,9 @@ function NetworkWorkspace() {
           onZoomIn={handleZoomIn}
           onZoomOut={handleZoomOut}
           onFitNetwork={handleFitNetwork}
+          onSetHopDistance={handleSetHopDistance}
+          onSetHopDirection={handleSetHopDirection}
+          onSetOverlay={handleSetOverlay}
         />
       </div>
 
@@ -184,41 +192,59 @@ function NetworkWorkspace() {
         <MapLegend />
       </div>
 
-      {/* 5. Bottom-Center Floating Panel: Forecast Time Horizon Scrubber */}
-      <div
-        className={cn(
-          "absolute bottom-4 left-1/2 -translate-x-1/2 z-20 pointer-events-auto w-[min(480px,88vw)] panel px-4 py-2 shadow-xl bg-surface-0/95 border border-border transition-all duration-300",
-          panelOpen && selected ? "lg:-translate-x-[calc(50%+195px)]" : ""
-        )}
-      >
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-xs w-20 shrink-0 text-fg">
-            {timeOffset === 0 ? "Observed (t₀)" : `Forecast +${timeOffset}h`}
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={24}
-            step={6}
-            value={timeOffset}
-            onChange={(e) => setTimeOffset(Number(e.target.value))}
-            className="flex-1 accent-water cursor-pointer h-1.5 bg-surface-3 rounded-lg"
-            aria-label="Hydrological forecast horizon scrubber"
-          />
-          <span className="font-mono text-[11px] w-20 text-right text-fg-subtle">
-            {timeOffset === 0 ? "Real-time" : "Multi-horizon"}
-          </span>
-        </div>
-      </div>
+      {/* 5. Bottom-Center Floating Panel: Topological Reachability Inspector */}
+      {selectedNode && (
+        <div
+          className={cn(
+            "absolute bottom-4 left-1/2 -translate-x-1/2 z-20 pointer-events-auto w-[min(620px,92vw)] panel px-4 py-2.5 shadow-xl bg-surface-0/95 border border-border transition-all duration-300 font-mono text-xs",
+            panelOpen ? "lg:-translate-x-[calc(50%+205px)]" : ""
+          )}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span
+                className="h-2.5 w-2.5 rounded-full shrink-0"
+                style={{
+                  background: RISK_STYLES[selectedNode.risk]?.hex ?? "#22c55e",
+                }}
+              />
+              <span className="font-semibold text-fg">{selectedNode.name}</span>
+              <span className="text-[10px] text-fg-subtle">({selectedNode.id})</span>
+            </div>
 
-      {/* 6. Right Side Slide-Over: Station Inspector */}
+            <div className="flex items-center gap-3 text-[11px]">
+              <div>
+                <span className="text-fg-subtle">Risk: </span>
+                <span className="font-bold text-fg">{(selectedNode.riskScore * 100).toFixed(0)}%</span>
+              </div>
+              <div>
+                <span className="text-fg-subtle">Upstream: </span>
+                <span className="text-cyan-400 font-semibold">{ancestors.length} basins</span>
+              </div>
+              <div>
+                <span className="text-fg-subtle">Downstream: </span>
+                <span className="text-emerald-400 font-semibold">
+                  {selectedNode.downstreamStationId ?? "Outlet"}
+                </span>
+              </div>
+              {selectedNode.coldStart && (
+                <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px]">
+                  Cold-Start
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Right Side Slide-Over: Basin Intelligence Inspector */}
       {panelOpen && selected && (
         <div className="absolute right-0 top-0 z-30 h-full pointer-events-auto slide-in-right">
           <StationInspector
             stationId={selected}
             detail={detail.data}
             isLoading={detail.isLoading}
-            onClose={handleClosePanel}
+            onClose={() => setUserClosed(true)}
             onSelectStation={handleStationSelect}
             edgesIn={edgesIn}
             edgesOut={edgesOut}
@@ -226,22 +252,17 @@ function NetworkWorkspace() {
         </div>
       )}
 
-      {/* 7. Floating Reopen Button when Inspector is Closed but a Station is Selected */}
+      {/* 7. Floating Reopen Button when Inspector is Closed but a Basin is Selected */}
       {!panelOpen && selected && STATIC_STATION_MAP[selected] && (
         <button
           className="absolute right-4 top-16 z-20 btn btn-sm shadow-xl font-mono flex items-center gap-2 bg-surface-0/95 border border-border hover:bg-surface-1 transition-colors pointer-events-auto"
           onClick={() => setUserClosed(false)}
-          title="Open station inspector"
+          title="Open basin intelligence inspector"
         >
           <span
             className="h-2 w-2 rounded-full"
             style={{
-              background:
-                RISK_STYLES[
-                  projectedNodes.find((n) => n.station.id === selected)?.risk ??
-                  STATIC_STATION_MAP[selected]?.risk ??
-                  "LOW"
-                ]?.hex ?? "#22c55e",
+              background: RISK_STYLES[STATIC_STATION_MAP[selected]?.risk ?? "LOW"]?.hex ?? "#22c55e",
             }}
           />
           <span className="font-medium text-fg">{STATIC_STATION_MAP[selected].name}</span>

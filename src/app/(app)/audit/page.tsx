@@ -42,7 +42,7 @@ export default function AuditPage() {
         </div>
         <Panel noPad>
           {logs.isError ? <ErrorState error={logs.error} onRetry={() => logs.refetch()} /> : logs.isLoading ? <div className="p-4 space-y-2">{Array.from({ length: 12 }).map((_, i) => <Skeleton key={i} className="h-7" />)}</div> : (
-            <DataTable columns={columns} rows={rows} rowKey={(r) => String(r.id)} pageSize={25} defaultSort={{ id: "ts", dir: "desc" }} exportName="anchor-audit" density="compact" maxHeight="calc(100vh - 360px)" toolbar={<>
+            <DataTable columns={columns} rows={rows} rowKey={(r) => String(r.id)} pageSize={25} defaultSort={{ id: "ts", dir: "desc" }} exportName="tirta-audit" density="compact" maxHeight="calc(100vh - 360px)" toolbar={<>
               <div className="relative"><Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-subtle" /><input className="input pl-7 w-52" placeholder="Resource, request ID…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search audit logs" /></div>
               <select className="input" value={actor} onChange={(e) => setActor(e.target.value)} aria-label="Actor"><option value="">All actors</option>{actors.map((a) => <option key={a}>{a}</option>)}</select>
               <select className="input" value={action} onChange={(e) => setAction(e.target.value)} aria-label="Action"><option value="">All actions</option>{actions.map((a) => <option key={a}>{a}</option>)}</select>

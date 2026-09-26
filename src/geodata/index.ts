@@ -1,4 +1,4 @@
-// Auto-generated bundled geospatial data for ANCHOR platform
+// Auto-generated bundled geospatial data for TIRTA platform
 import type { FeatureCollection } from "geojson";
 
 export const JAVA_GEOJSON: FeatureCollection = {

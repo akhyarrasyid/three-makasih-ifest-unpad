@@ -2,13 +2,13 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Check, CheckCheck, Clock, UserPlus, ExternalLink, X, RotateCcw, Search, Loader2 } from "lucide-react";
+import { Check, CheckCheck, Clock, UserPlus, ExternalLink, X, RotateCcw, Search, Loader2, GitFork, Droplets, Activity } from "lucide-react";
 import { useAlerts, useAlertMutation, useStations } from "@/hooks/use-api";
 import { useUiStore } from "@/store/ui-store";
 import { useSelectionStore } from "@/store/selection-store";
 import { DataTable, type Column } from "@/components/tables/data-table";
 import { PageHeader, Panel, SeverityBadge, StatusBadge, RiskBadge, Skeleton, ErrorState, Segmented, MetricCard, KV, ConfirmDialog, Dialog, Chip, Sparkline, RISK_STYLES } from "@/components/ui/primitives";
-import { STATION_MAP } from "@/mock/stations";
+import { STATIC_STATION_MAP } from "@/data/network-static";
 import { fmtDateTime, fmtRelative } from "@/lib/format";
 import { SIM_BASE_NOW, SIM_TICK_MS } from "@/config/constants";
 import type { Alert, AlertSeverity, AlertStatus } from "@/types/domain";
@@ -24,7 +24,9 @@ function AlertsInner() {
   const user = useUiStore((s) => s.user);
   const tick = useUiStore((s) => s.tick);
   const selectStation = useSelectionStore((s) => s.selectStation);
+  const queryAlert = params.get("alert");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const activeAlertId = selectedId ?? queryAlert;
   const [status, setStatus] = useState<AlertStatus | "ACTIVE" | "ALL">("ACTIVE");
   const [severity, setSeverity] = useState<AlertSeverity | "ALL">("ALL");
   const [q, setQ] = useState("");
@@ -32,14 +34,9 @@ function AlertsInner() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignee, setAssignee] = useState("d.santoso");
 
-  useEffect(() => {
-    const a = params.get("alert");
-    if (a) setSelectedId(a);
-  }, [params]);
-
   const list = alerts.data ?? [];
   const rows = useMemo(() => list.filter((a) => (status === "ALL" || (status === "ACTIVE" ? a.status !== "RESOLVED" : a.status === status)) && (severity === "ALL" || a.severity === severity) && (!q || `${a.title} ${a.id} ${a.stationId ?? ""} ${a.correlationId}`.toLowerCase().includes(q.toLowerCase()))), [list, status, severity, q]);
-  const selected = list.find((a) => a.id === selectedId) ?? null;
+  const selected = list.find((a) => a.id === activeAlertId) ?? null;
   const snap = selected?.stationId ? stations.data?.find((s) => s.station.id === selected.stationId) : undefined;
   const simNow = SIM_BASE_NOW + tick * SIM_TICK_MS;
 
@@ -53,7 +50,7 @@ function AlertsInner() {
   const columns: Column<Alert>[] = [
     { id: "severity", header: "Severity", sortValue: (r) => SEV_ORDER[r.severity], exportValue: (r) => r.severity, cell: (r) => <SeverityBadge severity={r.severity} /> },
     { id: "title", header: "Alert", hideable: false, sortValue: (r) => r.title, cell: (r) => <div className="max-w-[420px]"><div className="truncate text-xs font-medium">{r.title}</div><div className="t-caption mono">{r.id}{r.fromScenario ? " · scenario" : ""}</div></div> },
-    { id: "station", header: "Station", sortValue: (r) => r.stationId ?? "", cell: (r) => (r.stationId ? <span className="text-xs">{STATION_MAP[r.stationId]?.name} <span className="mono text-fg-subtle">{r.stationId}</span></span> : <span className="t-caption">network</span>) },
+    { id: "station", header: "HUC12 Basin", sortValue: (r) => r.stationId ?? "", cell: (r) => (r.stationId ? <span className="text-xs">{STATIC_STATION_MAP[r.stationId]?.name ?? r.stationId} <span className="mono text-fg-subtle">{r.stationId}</span></span> : <span className="t-caption">network</span>) },
     { id: "source", header: "Source", sortValue: (r) => r.source, cell: (r) => <span className="mono text-fg-muted">{r.source}</span> },
     { id: "status", header: "Status", sortValue: (r) => r.status, cell: (r) => <StatusBadge status={r.status} dot={false} /> },
     { id: "ack", header: "Acknowledged by", sortValue: (r) => r.acknowledgedBy ?? "", cell: (r) => <span className="text-xs text-fg-muted">{r.acknowledgedBy ?? "—"}</span>, defaultHidden: true },
@@ -64,12 +61,12 @@ function AlertsInner() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Alerts" subtitle="Incident management for threshold exceedances, rapid rises, telemetry gaps and model health signals." meta={<><Chip tone="crit">{counts.critical} critical</Chip><Chip tone="warn">{counts.open} open</Chip><Chip tone="water">{counts.ack} acknowledged</Chip></>} />
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <MetricCard label="Open" value={counts.open} tone={counts.open ? "crit" : "ok"} hint="awaiting acknowledgement" />
-        <MetricCard label="Acknowledged" value={counts.ack} tone="water" hint="under investigation" />
-        <MetricCard label="Critical (active)" value={counts.critical} tone={counts.critical ? "crit" : "neutral"} hint="threshold exceedance" />
-        <MetricCard label="Resolved" value={counts.resolved24} tone="ok" hint="last 30 days" />
+      <PageHeader title="Risk Alerts" subtitle="Operational incident management for water-stress threshold exceedance, supply deficits, upstream stress transmission, and model confidence signals." meta={<><Chip tone="crit">{counts.critical} critical</Chip><Chip tone="warn">{counts.open} open</Chip><Chip tone="water">{counts.ack} acknowledged</Chip></>} />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 font-mono">
+        <MetricCard label="Open Alerts" value={counts.open} tone={counts.open ? "crit" : "ok"} hint="awaiting operator review" />
+        <MetricCard label="Acknowledged" value={counts.ack} tone="water" hint="under mitigation" />
+        <MetricCard label="Critical (Active)" value={counts.critical} tone={counts.critical ? "crit" : "neutral"} hint="critical water stress" />
+        <MetricCard label="Resolved" value={counts.resolved24} tone="ok" hint="recorded in audit log" />
       </div>
 
       <div className={`grid gap-4 ${selected ? "xl:grid-cols-[minmax(0,1fr)_440px]" : ""}`}>
@@ -83,17 +80,17 @@ function AlertsInner() {
               columns={columns}
               rows={rows}
               rowKey={(r) => r.id}
-              selectedKey={selectedId}
+              selectedKey={activeAlertId ?? undefined}
               onRowClick={(r) => { setSelectedId(r.id); if (r.stationId) selectStation(r.stationId); }}
               defaultSort={{ id: "created", dir: "desc" }}
-              exportName="anchor-alerts"
+              exportName="tirta-alerts"
               emptyTitle="No alerts match the current filters"
               emptyDescription="Try widening the status or severity filter."
               toolbar={
                 <>
-                  <div className="relative"><Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-subtle" /><input className="input pl-7 w-48" placeholder="Search alerts…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search alerts" /></div>
+                  <div className="relative"><Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-subtle" /><input className="input pl-7 w-48 font-mono text-xs" placeholder="Search alerts…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search alerts" /></div>
                   <Segmented ariaLabel="Status" options={[{ value: "ACTIVE", label: "Active" }, { value: "OPEN", label: "Open" }, { value: "ACKNOWLEDGED", label: "Ack" }, { value: "RESOLVED", label: "Resolved" }, { value: "ALL", label: "All" }]} value={status} onChange={setStatus} />
-                  <select className="input" value={severity} onChange={(e) => setSeverity(e.target.value as AlertSeverity | "ALL")} aria-label="Severity">
+                  <select className="input font-mono text-xs" value={severity} onChange={(e) => setSeverity(e.target.value as AlertSeverity | "ALL")} aria-label="Severity">
                     <option value="ALL">All severities</option>
                     {(["CRITICAL", "WARNING", "INFO", "DATA_QUALITY", "MODEL"] as AlertSeverity[]).map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
                   </select>
@@ -117,36 +114,44 @@ function AlertsInner() {
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 <p className="t-body text-fg-muted">{selected.description}</p>
                 <div className="flex flex-wrap gap-2">
-                  {selected.status === "OPEN" && <button className="btn btn-primary btn-sm" onClick={() => setConfirm({ action: "acknowledge", label: "Acknowledge alert" })}><Check className="h-3.5 w-3.5" /> Acknowledge</button>}
-                  {selected.status !== "RESOLVED" && <button className="btn btn-sm" onClick={() => setConfirm({ action: "resolve", label: "Resolve alert" })}><CheckCheck className="h-3.5 w-3.5" /> Resolve</button>}
-                  {selected.status !== "RESOLVED" && <button className="btn btn-sm" onClick={() => act("snooze", { minutes: 30 })}><Clock className="h-3.5 w-3.5" /> Snooze 30m</button>}
-                  {selected.status !== "RESOLVED" && <button className="btn btn-sm" onClick={() => setAssignOpen(true)}><UserPlus className="h-3.5 w-3.5" /> Assign</button>}
-                  {selected.status === "RESOLVED" && <button className="btn btn-sm" onClick={() => setConfirm({ action: "reopen", label: "Reopen alert", danger: true })}><RotateCcw className="h-3.5 w-3.5" /> Reopen</button>}
-                  <button className="btn btn-sm btn-ghost" onClick={() => alert(`Incident INC-${2200 + (selected.id.charCodeAt(selected.id.length - 1) % 40)} opened (demo)`)}><ExternalLink className="h-3.5 w-3.5" /> Open incident</button>
+                  {selected.status === "OPEN" && <button className="btn btn-primary btn-sm font-mono text-xs" onClick={() => setConfirm({ action: "acknowledge", label: "Acknowledge alert" })}><Check className="h-3.5 w-3.5" /> Acknowledge</button>}
+                  {selected.status !== "RESOLVED" && <button className="btn btn-sm font-mono text-xs" onClick={() => setConfirm({ action: "resolve", label: "Resolve alert" })}><CheckCheck className="h-3.5 w-3.5" /> Resolve</button>}
+                  {selected.status !== "RESOLVED" && <button className="btn btn-sm font-mono text-xs" onClick={() => act("snooze", { minutes: 30 })}><Clock className="h-3.5 w-3.5" /> Snooze 30m</button>}
+                  {selected.status !== "RESOLVED" && <button className="btn btn-sm font-mono text-xs" onClick={() => setAssignOpen(true)}><UserPlus className="h-3.5 w-3.5" /> Assign</button>}
+                  {selected.status === "RESOLVED" && <button className="btn btn-sm font-mono text-xs" onClick={() => setConfirm({ action: "reopen", label: "Reopen alert", danger: true })}><RotateCcw className="h-3.5 w-3.5" /> Reopen</button>}
                   {mutate.isPending && <Loader2 className="h-4 w-4 animate-spin text-fg-subtle" />}
                 </div>
                 {snap && (
-                  <div className="rounded-md border border-border bg-surface-0 p-3">
+                  <div className="rounded-md border border-border bg-surface-0 p-3 font-mono text-xs">
                     <div className="flex items-center justify-between">
-                      <div className="t-label">Affected station</div>
+                      <div className="text-[10px] uppercase text-fg-subtle font-semibold tracking-wider">Affected HUC12 Sub-Basin</div>
                       <RiskBadge risk={snap.risk} />
                     </div>
                     <div className="mt-2 flex items-center gap-3">
                       <div className="flex-1">
-                        <div className="text-sm font-medium">{snap.station.name} <span className="mono text-fg-subtle">{snap.station.id}</span></div>
-                        <div className="t-caption">{snap.station.river} · {snap.currentTma.toFixed(2)} m · {Math.round(snap.thresholdRatio * 100)}% of alert · +24h {snap.forecast24h.toFixed(2)} m</div>
+                        <div className="text-sm font-medium text-fg">{snap.station.name} <span className="mono text-fg-subtle">{snap.station.id}</span></div>
+                        <div className="text-[11px] text-fg-muted mt-0.5">
+                          Supply: {snap.currentSupply.toFixed(1)} m³/s · Anomaly: {snap.climatologyAnomalySigma.toFixed(2)}σ · Risk: {(snap.riskScore * 100).toFixed(0)}%
+                        </div>
                       </div>
-                      <Sparkline data={snap.sparkline} width={90} height={28} stroke={RISK_STYLES[snap.risk].hex} />
+                      <Sparkline data={snap.sparkline} width={80} height={24} stroke={RISK_STYLES[snap.risk].hex} />
                     </div>
+                    {/* Interaction Links per Prompt Section 24 */}
                     <div className="mt-3 flex gap-2">
-                      <Link href={`/network?station=${snap.station.id}`} className="btn btn-sm flex-1 justify-center">River segment</Link>
-                      <Link href={`/forecasts?station=${snap.station.id}`} className="btn btn-sm flex-1 justify-center">Forecast</Link>
-                      <button className="btn btn-sm flex-1 justify-center" onClick={() => router.push(`/stations?station=${snap.station.id}`)}>Inference</button>
+                      <Link href={`/network?station=${snap.station.id}`} className="btn btn-sm flex-1 justify-center text-xs">
+                        <GitFork className="h-3 w-3 mr-1 text-cyan-400" /> River Network
+                      </Link>
+                      <Link href={`/forecasts?station=${snap.station.id}`} className="btn btn-sm flex-1 justify-center text-xs">
+                        <Droplets className="h-3 w-3 mr-1 text-water" /> Forecast
+                      </Link>
+                      <Link href={`/inference?station=${snap.station.id}`} className="btn btn-sm flex-1 justify-center text-xs">
+                        <Activity className="h-3 w-3 mr-1 text-purple-400" /> Trace
+                      </Link>
                     </div>
                   </div>
                 )}
-                <div>
-                  <div className="t-label mb-1">Details</div>
+                <div className="font-mono text-xs">
+                  <div className="text-[10px] uppercase text-fg-subtle font-semibold tracking-wider mb-1">Incident Telemetry</div>
                   <KV k="Source" v={selected.source} mono />
                   <KV k="Created" v={fmtDateTime(selected.createdAt)} mono />
                   <KV k="Updated" v={fmtDateTime(selected.updatedAt)} mono />
@@ -154,12 +159,12 @@ function AlertsInner() {
                   <KV k="Assigned to" v={selected.assignedTo ?? "—"} />
                   {selected.snoozedUntil && <KV k="Snoozed until" v={fmtDateTime(selected.snoozedUntil)} mono />}
                   <KV k="Correlation ID" v={selected.correlationId} mono />
-                  <KV k="Origin" v={selected.fromScenario ? "Live simulation" : "Historical"} />
+                  <KV k="Origin" v={selected.fromScenario ? "Demo scenario injection" : "Telemetry audit"} />
                 </div>
                 {Object.keys(selected.metadata).length > 0 && (
                   <div>
-                    <div className="t-label mb-1">Payload</div>
-                    <pre className="rounded-md border border-border bg-surface-0 p-3 mono text-fg-muted overflow-auto">{JSON.stringify(selected.metadata, null, 2)}</pre>
+                    <div className="text-[10px] uppercase text-fg-subtle font-semibold tracking-wider mb-1">Payload Envelope</div>
+                    <pre className="rounded-md border border-border bg-surface-0 p-3 mono text-xs text-fg-muted overflow-auto">{JSON.stringify(selected.metadata, null, 2)}</pre>
                   </div>
                 )}
                 <p className="t-caption">Actions are recorded in the audit trail as {user?.email.split("@")[0]} ({user?.role}).</p>
@@ -171,11 +176,11 @@ function AlertsInner() {
 
       <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)} onConfirm={() => confirm && act(confirm.action)} title={confirm?.label ?? ""} description={`${selected?.title ?? ""} — this action will be attributed to ${user?.name} and appended to the audit log.`} confirmLabel={confirm?.label.split(" ")[0]} danger={confirm?.danger} busy={mutate.isPending} />
       <Dialog open={assignOpen} onClose={() => setAssignOpen(false)} title="Assign alert" description="Route this alert to an on-call responder" footer={<><button className="btn" onClick={() => setAssignOpen(false)}>Cancel</button><button className="btn btn-primary" onClick={() => act("assign", { assignee })}>Assign</button></>}>
-        <select className="input w-full" value={assignee} onChange={(e) => setAssignee(e.target.value)} aria-label="Assignee">
-          <option value="d.santoso">d.santoso · Operator (on-call)</option>
-          <option value="a.prasetyo">a.prasetyo · Data Scientist</option>
-          <option value="n.wulandari">n.wulandari · Data Scientist</option>
-          <option value="admin.ops">admin.ops · Administrator</option>
+        <select className="input w-full font-mono text-xs" value={assignee} onChange={(e) => setAssignee(e.target.value)} aria-label="Assignee">
+          <option value="d.santoso">d.santoso · Water Resources Operator (on-call)</option>
+          <option value="a.prasetyo">a.prasetyo · Staff ML Engineer</option>
+          <option value="n.wulandari">n.wulandari · Hydrology Specialist</option>
+          <option value="admin.ops">admin.ops · Platform Administrator</option>
         </select>
       </Dialog>
     </div>

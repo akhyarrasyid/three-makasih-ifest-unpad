@@ -1,14 +1,21 @@
 import { RISK_THRESHOLDS } from "@/config/constants";
+import { clamp, round } from "@/lib/prng";
 import type { RiskLevel, Thresholds } from "@/types/domain";
 
 export interface RiskInput {
-  currentTma: number;
-  forecast6h: number;
-  forecast24h: number;
-  thresholds: Thresholds;
-  rainfall24h: number;
-  upstreamInfluence: number;
-  missingRate: number;
+  currentTma?: number;
+  currentSupply?: number;
+  climatologyAnomalySigma?: number;
+  waterLimitationProxy?: number;
+  upstreamStressScore?: number;
+  withdrawalToSupplyRatio?: number;
+  coldStart?: boolean;
+  forecast6h?: number;
+  forecast24h?: number;
+  thresholds?: Thresholds;
+  rainfall24h?: number;
+  upstreamInfluence?: number;
+  missingRate?: number;
 }
 
 export interface RiskResult {
@@ -18,33 +25,45 @@ export interface RiskResult {
 }
 
 /**
- * Deterministic demonstration risk engine.
- * Score ≈ ratio of effective water level to the alert threshold; adjusted by
- * forecast increase, rainfall, upstream conditions and data quality.
- * Thresholds: <60% LOW · 60–80% MODERATE · 80–100% HIGH · >100% CRITICAL (demo assumptions).
+ * Deterministic water-stress risk scoring engine.
+ * Computes model continuous probability P(water stress at t+1) in [0, 1].
+ * Tiers: <0.25 LOW · 0.25–0.50 MODERATE · 0.50–0.75 HIGH · >0.75 CRITICAL.
+ * Note: Risk tier is a demonstration interpretation of the model continuous probability.
  */
 export function computeRisk(input: RiskInput): RiskResult {
-  const { currentTma, forecast6h, forecast24h, thresholds, rainfall24h, upstreamInfluence, missingRate } = input;
-  const alert = thresholds.alert;
-  const proximity = currentTma / alert;
-  const forecastRise = Math.max(0, Math.max(forecast6h, forecast24h * 0.85) - currentTma) / alert;
-  const rainTerm = Math.min(0.08, (rainfall24h / 60) * 0.08);
-  const upstreamTerm = Math.min(0.08, (upstreamInfluence / alert) * 0.4);
-  const dqTerm = missingRate > 0.2 ? 0.03 : 0;
-  const score = proximity + forecastRise * 0.7 + rainTerm + upstreamTerm + dqTerm;
-  const level: RiskLevel =
-    score >= RISK_THRESHOLDS.CRITICAL ? "CRITICAL" : score >= RISK_THRESHOLDS.HIGH ? "HIGH" : score >= RISK_THRESHOLDS.MODERATE ? "MODERATE" : "LOW";
+  const anomaly = input.climatologyAnomalySigma ?? 0;
+  const limitation = input.waterLimitationProxy ?? 0.3;
+  const upstream = input.upstreamStressScore ?? input.upstreamInfluence ?? 0;
+  const withdrawalRatio = input.withdrawalToSupplyRatio ?? 0.25;
+
+  const climTerm = anomaly < 0 ? Math.min(0.42, Math.abs(anomaly) * 0.28) : -0.08;
+  const limitationTerm = limitation * 0.30;
+  const upstreamTerm = upstream * 0.22;
+  const withdrawalTerm = withdrawalRatio * 0.16;
+
+  const rawScore = 0.204 + climTerm + limitationTerm + upstreamTerm + withdrawalTerm;
+  const score = round(clamp(rawScore, 0.05, 0.96), 3);
+
+  let level: RiskLevel = "LOW";
+  if (score >= RISK_THRESHOLDS.CRITICAL) level = "CRITICAL";
+  else if (score >= RISK_THRESHOLDS.HIGH) level = "HIGH";
+  else if (score >= RISK_THRESHOLDS.MODERATE) level = "MODERATE";
+
   return {
     level,
-    score: Math.round(score * 1000) / 1000,
+    score,
     components: [
-      { label: "Threshold proximity", value: proximity },
-      { label: "Forecast increase", value: forecastRise * 0.7 },
-      { label: "Rainfall (24h)", value: rainTerm },
-      { label: "Upstream conditions", value: upstreamTerm },
-      { label: "Data quality penalty", value: dqTerm },
+      { label: "Climatology Anomaly (σ departure)", value: round(Math.max(0, climTerm), 3) },
+      { label: "Water-Limitation Proxy", value: round(limitationTerm, 3) },
+      { label: "Directed Upstream Reachability Stress", value: round(upstreamTerm, 3) },
+      { label: "Withdrawal Pressure Ratio", value: round(withdrawalTerm, 3) },
     ],
   };
 }
 
-export const RISK_ORDER: Record<RiskLevel, number> = { LOW: 0, MODERATE: 1, HIGH: 2, CRITICAL: 3 };
+export const RISK_ORDER: Record<RiskLevel, number> = {
+  LOW: 0,
+  MODERATE: 1,
+  HIGH: 2,
+  CRITICAL: 3,
+};

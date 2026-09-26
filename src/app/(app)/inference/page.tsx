@@ -8,12 +8,23 @@ import { PageHeader, Panel, MetricCard, Skeleton, ErrorState, Chip, StatusBadge,
 import { MetricLineChart, CHART_COLORS } from "@/components/charts/charts";
 import { DataTable, type Column } from "@/components/tables/data-table";
 import { InferenceTrace } from "@/features/inference/trace-view";
-import { STATION_MAP } from "@/mock/stations";
+import { STATIC_STATION_MAP, STATIC_STATIONS } from "@/data/network-static";
 import { fmtTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { InferenceRequest } from "@/types/domain";
 
-const PIPELINE = ["API Request", "Orchestrator", "Data Processing", "Station Router", "Model Ensemble", "Spatial Reconciliation", "Prediction", "Response"];
+const TIRTA_PIPELINE = [
+  "Forecast Request",
+  "Feature Retrieval",
+  "Hydrology Processing",
+  "Temporal Context",
+  "Reachability Lookup",
+  "GBDT Inference",
+  "Directed GNN",
+  "Model Fusion",
+  "Risk Interpretation",
+  "Response",
+];
 
 function InferenceInner() {
   const params = useSearchParams();
@@ -25,88 +36,252 @@ function InferenceInner() {
   const [activeStage, setActiveStage] = useState(0);
 
   useEffect(() => {
-    const id = setInterval(() => setActiveStage((s) => (s + 1) % PIPELINE.length), demo ? 450 : 900);
+    const id = setInterval(() => setActiveStage((s) => (s + 1) % TIRTA_PIPELINE.length), demo ? 450 : 900);
     return () => clearInterval(id);
   }, [demo]);
 
-  useEffect(() => {
-    const r = params.get("request");
-    if (r && inf.data) {
-      const found = inf.data.requests.find((x) => x.requestId === r);
-      if (found) setSelected(found);
+  const queryRequestId = params.get("request");
+  const activeSelected = useMemo(() => {
+    if (selected) return selected;
+    if (queryRequestId && inf.data) {
+      return inf.data.requests.find((x) => x.requestId === queryRequestId) ?? null;
     }
-  }, [params, inf.data]);
+    return null;
+  }, [selected, queryRequestId, inf.data]);
 
   const d = inf.data;
-  const rows = useMemo(() => (d?.requests ?? []).filter((r) => (statusFilter === "ALL" || r.status === statusFilter) && (!stationFilter || r.stationId === stationFilter)), [d, statusFilter, stationFilter]);
+  const rows = useMemo(
+    () =>
+      (d?.requests ?? []).filter(
+        (r) =>
+          (statusFilter === "ALL" || r.status === statusFilter) &&
+          (!stationFilter || r.stationId === stationFilter)
+      ),
+    [d, statusFilter, stationFilter]
+  );
 
   const columns: Column<InferenceRequest>[] = [
-    { id: "req", header: "request_id", hideable: false, sortValue: (r) => r.requestId, cell: (r) => <span className="mono text-accent-water">{r.requestId}</span> },
-    { id: "ts", header: "timestamp", sortValue: (r) => r.timestamp, cell: (r) => <span className="mono text-fg-muted">{fmtTime(r.timestamp)}</span> },
-    { id: "station", header: "station_id", sortValue: (r) => r.stationId, cell: (r) => <span className="text-xs">{r.stationId} <span className="t-caption">{STATION_MAP[r.stationId]?.name}</span></span> },
-    { id: "model", header: "model_version", sortValue: (r) => r.modelVersion, cell: (r) => <span className="mono text-accent-water">{r.modelVersion}</span>, defaultHidden: true },
-    { id: "route", header: "routing_decision", cell: (r) => <span className="mono text-fg-muted">{r.route.join(" → ")}</span> },
-    { id: "latency", header: "latency", align: "right", sortValue: (r) => r.latencyMs, cell: (r) => <span className={cn("mono", r.latencyMs > 250 ? "text-[#f5c261]" : "")}>{r.latencyMs} ms</span> },
-    { id: "features", header: "features", align: "right", sortValue: (r) => r.featureCount, cell: (r) => <span className="mono">{r.featureCount}</span>, defaultHidden: true },
-    { id: "horizons", header: "forecast_horizon", cell: () => <span className="mono text-fg-muted">1…72h (7)</span>, defaultHidden: true },
-    { id: "conf", header: "confidence", align: "right", sortValue: (r) => r.confidence, cell: (r) => <span className="mono">{r.confidence ? `${Math.round(r.confidence * 100)}%` : "—"}</span> },
-    { id: "status", header: "status", sortValue: (r) => r.status, cell: (r) => <StatusBadge status={r.status} dot={false} /> },
+    {
+      id: "req",
+      header: "request_id",
+      hideable: false,
+      sortValue: (r) => r.requestId,
+      cell: (r) => <span className="mono text-water font-medium">{r.requestId}</span>,
+    },
+    {
+      id: "ts",
+      header: "timestamp",
+      sortValue: (r) => r.timestamp,
+      cell: (r) => <span className="mono text-fg-muted">{fmtTime(r.timestamp)}</span>,
+    },
+    {
+      id: "station",
+      header: "sub_basin_id",
+      sortValue: (r) => r.stationId,
+      cell: (r) => (
+        <span className="text-xs">
+          {r.stationId} <span className="t-caption">({STATIC_STATION_MAP[r.stationId]?.name ?? "HUC12"})</span>
+        </span>
+      ),
+    },
+    {
+      id: "model",
+      header: "model_version",
+      sortValue: (r) => r.modelVersion,
+      cell: (r) => <span className="mono text-water">{r.modelVersion}</span>,
+      defaultHidden: true,
+    },
+    {
+      id: "route",
+      header: "routing_pipeline",
+      cell: (r) => <span className="mono text-fg-muted text-[11px]">{r.route.join(" → ")}</span>,
+    },
+    {
+      id: "latency",
+      header: "total_latency",
+      align: "right",
+      sortValue: (r) => r.latencyMs,
+      cell: (r) => (
+        <span className={cn("mono", r.latencyMs > 220 ? "text-amber-400" : "text-fg")}>
+          {r.latencyMs} ms
+        </span>
+      ),
+    },
+    {
+      id: "features",
+      header: "features",
+      align: "right",
+      sortValue: (r) => r.featureCount,
+      cell: (r) => <span className="mono">{r.featureCount}</span>,
+      defaultHidden: true,
+    },
+    {
+      id: "conf",
+      header: "confidence",
+      align: "right",
+      sortValue: (r) => r.confidence,
+      cell: (r) => (
+        <span className="mono font-semibold">
+          {r.confidence ? `${Math.round(r.confidence * 100)}%` : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: "status",
+      sortValue: (r) => r.status,
+      cell: (r) => <StatusBadge status={r.status} dot={false} />,
+    },
   ];
 
-  if (inf.isError) return <ErrorState error={inf.error} onRetry={() => inf.refetch()} title="Inference control plane unavailable" />;
+  if (inf.isError)
+    return <ErrorState error={inf.error} onRetry={() => inf.refetch()} title="Inference control plane unavailable" />;
 
   return (
     <RoleGate>
       <div className="space-y-5">
-        <PageHeader title="Inference Control Plane" subtitle="Real-time observability for the ANCHOR forecasting service — throughput, latency distribution, worker pool and per-request distributed traces." meta={<><Chip tone="water">{d?.modelVersion ?? "…"}</Chip><Chip tone="ok">SLA P95 &lt; 250 ms</Chip><Chip>6 workers · ap-southeast-3</Chip></>} />
-
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
-          {d ? (
+        <PageHeader
+          title="TIRTA Inference Control Plane"
+          subtitle="Real-time telemetry and execution waterfall for online feature retrieval, reachability lookup, and dual-model inference."
+          meta={
             <>
-              <MetricCard label="Requests/sec" value={d.metrics.requestsPerSec.toFixed(1)} />
-              <MetricCard label="P50 latency" value={d.metrics.p50Ms} unit="ms" />
-              <MetricCard label="P95 latency" value={d.metrics.p95Ms} unit="ms" tone={d.metrics.p95Ms > 250 ? "warn" : "neutral"} />
-              <MetricCard label="P99 latency" value={d.metrics.p99Ms} unit="ms" tone={d.metrics.p99Ms > 400 ? "warn" : "neutral"} />
-              <MetricCard label="Error rate" value={`${(d.metrics.errorRate * 100).toFixed(2)}%`} tone={d.metrics.errorRate > 0.01 ? "crit" : "ok"} />
-              <MetricCard label="Throughput" value={d.metrics.throughputPerMin} unit="/min" />
-              <MetricCard label="Queue depth" value={d.metrics.queueDepth} tone={d.metrics.queueDepth > 10 ? "warn" : "neutral"} />
-              <MetricCard label="Active workers" value={`${d.metrics.activeWorkers}/${d.metrics.totalWorkers}`} tone="ok" />
+              <Chip tone="water">GBDT + GNN Dual Execution</Chip>
+              <Chip tone="ok">183 ms Waterfall</Chip>
+              <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 font-mono text-xs">
+                SIMULATED DEMO TELEMETRY
+              </span>
             </>
-          ) : (
-            Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-[84px]" />)
-          )}
-        </div>
+          }
+        />
 
-        <Panel title="Inference pipeline" subtitle="Live request flow through the serving graph · active stage highlighted" noPad>
-          <div className="flex items-stretch overflow-x-auto p-4 gap-1">
-            {PIPELINE.map((p, i) => (
-              <div key={p} className="flex items-center gap-1 shrink-0">
-                <div className={cn("relative rounded-md border px-3 py-2 text-xs min-w-[128px] transition-colors", i === activeStage ? "border-accent-water/40 bg-accent-water/10 text-accent-water" : "border-border bg-surface-0 text-fg-muted")}>
-                  <div className="font-medium">{p}</div>
-                  <div className="t-caption !text-[10px] mt-0.5">{["gateway", "orchestrator", "feature-pipeline", "router", "model-service", "graph-service", "orchestrator", "gateway"][i]}</div>
-                  {i === activeStage && <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-accent-water" />}
-                </div>
-                {i < PIPELINE.length - 1 && <div className={cn("h-px w-5", i < activeStage ? "bg-accent-water" : "bg-border-strong")} />}
+        {/* Live Execution Pipeline Stages */}
+        <div className="panel p-3.5 bg-surface-1 border border-border">
+          <div className="text-[10px] uppercase font-mono text-fg-subtle tracking-wider mb-2 flex items-center justify-between">
+            <span>Inference Orchestration Pipeline (Simulated Waterfall)</span>
+            <span className="text-water">183 ms total latency</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-1.5 font-mono text-[10px]">
+            {TIRTA_PIPELINE.map((stage, i) => (
+              <div
+                key={stage}
+                className={cn(
+                  "p-2 rounded border text-center transition-all truncate",
+                  i === activeStage
+                    ? "bg-water text-white font-bold border-water shadow-md"
+                    : i < activeStage
+                    ? "bg-surface-2 text-fg border-border"
+                    : "bg-surface-0 text-fg-subtle border-border/50"
+                )}
+              >
+                {stage}
               </div>
             ))}
           </div>
-        </Panel>
-
-        <div className="grid gap-4 xl:grid-cols-2">
-          <Panel title="Request rate" subtitle="Requests per second · last 60 minutes">
-            {d ? <MetricLineChart data={d.metrics.timeline} xFormatter={(v) => fmtTime(v, false)} series={[{ key: "rps", name: "req/s", color: CHART_COLORS.actual, area: true }]} unit="" height={180} /> : <Skeleton className="h-[180px]" />}
-          </Panel>
-          <Panel title="P95 latency" subtitle="Milliseconds · SLA 250 ms">
-            {d ? <MetricLineChart data={d.metrics.timeline} xFormatter={(v) => fmtTime(v, false)} series={[{ key: "p95", name: "P95 ms", color: CHART_COLORS.forecast }]} unit="ms" height={180} referenceY={{ value: 250, label: "SLA", color: CHART_COLORS.critical }} yDomain={[120, 320]} /> : <Skeleton className="h-[180px]" />}
-          </Panel>
         </div>
 
-        <Panel title="Inference request timeline" subtitle="Scheduled 10-minute cycles across 30 stations plus on-demand requests · click a row for the full trace" noPad actions={<div className="flex gap-2"><select className="input" value={stationFilter} onChange={(e) => setStationFilter(e.target.value)} aria-label="Station filter"><option value="">All stations</option>{Object.values(STATION_MAP).map((s) => <option key={s.id} value={s.id}>{s.id} · {s.name}</option>)}</select><Segmented ariaLabel="Status" options={[{ value: "ALL", label: "All" }, { value: "SUCCESS", label: "Success" }, { value: "DEGRADED", label: "Degraded" }, { value: "ERROR", label: "Error" }, { value: "TIMEOUT", label: "Timeout" }]} value={statusFilter} onChange={setStatusFilter} /></div>}>
-          {d ? <DataTable columns={columns} rows={rows} rowKey={(r) => r.requestId} pageSize={12} onRowClick={setSelected} selectedKey={selected?.requestId} defaultSort={{ id: "ts", dir: "desc" }} exportName="anchor-inference" density="compact" /> : <Skeleton className="m-3 h-72" />}
+        {/* Telemetry Metrics Strip */}
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6 font-mono">
+          {d ? (
+            <>
+              <MetricCard
+                label="Mean Latency (p50)"
+                value={`${d.summary.p50LatencyMs}`}
+                unit="ms"
+                hint="Feature fetch + GBDT + GNN"
+                tone="ok"
+              />
+              <MetricCard
+                label="p95 Latency"
+                value={`${d.summary.p95LatencyMs}`}
+                unit="ms"
+                hint="Waterfall threshold < 300ms"
+                tone="neutral"
+              />
+              <MetricCard
+                label="Throughput"
+                value={`${d.summary.throughputRps}`}
+                unit="req/s"
+                hint="Sub-basin forecast queries"
+              />
+              <MetricCard
+                label="Success Rate"
+                value={`${((1 - d.summary.errorRate) * 100).toFixed(1)}%`}
+                tone={d.summary.errorRate > 0.05 ? "crit" : "ok"}
+                hint="24h SLA"
+              />
+              <MetricCard
+                label="Cache Hit Rate"
+                value={`${(d.summary.cacheHitRate * 100).toFixed(0)}%`}
+                hint="Reachability graph cache"
+                tone="ok"
+              />
+              <MetricCard
+                label="Active Models"
+                value="2"
+                unit="branches"
+                hint="GBDT + Directed GNN"
+                tone="water"
+              />
+            </>
+          ) : (
+            Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-[92px]" />)
+          )}
+        </div>
+
+        {/* Requests Table */}
+        <Panel
+          title="Inference Request Stream"
+          subtitle="Recent sub-basin forecast evaluation requests with step-level timings"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                className="input font-mono text-xs"
+                value={stationFilter}
+                onChange={(e) => setStationFilter(e.target.value)}
+                aria-label="Filter by Sub-Basin"
+              >
+                <option value="">All sub-basins</option>
+                {STATIC_STATIONS.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.id})
+                  </option>
+                ))}
+              </select>
+              <Segmented
+                ariaLabel="Status filter"
+                options={[
+                  { value: "ALL", label: "All" },
+                  { value: "SUCCESS", label: "Success" },
+                  { value: "DEGRADED", label: "Degraded" },
+                  { value: "ERROR", label: "Error" },
+                ]}
+                value={statusFilter}
+                onChange={setStatusFilter}
+              />
+            </div>
+          }
+          noPad
+        >
+          <DataTable
+            columns={columns}
+            rows={rows}
+            rowKey={(r) => r.requestId}
+            pageSize={10}
+            selectedKey={activeSelected?.requestId}
+            onRowClick={(r) => setSelected(r)}
+            exportName="tirta-inference-requests"
+          />
         </Panel>
 
-        <Dialog open={!!selected} onClose={() => setSelected(null)} title={selected?.requestId ?? ""} description="Distributed trace and routing decision" width="max-w-2xl">
-          {selected && <InferenceTrace request={selected} />}
+        {/* Trace Waterfall Dialog */}
+        <Dialog
+          open={Boolean(activeSelected)}
+          onClose={() => setSelected(null)}
+          title={`Inference Request Trace · ${activeSelected?.requestId}`}
+          description={`Sub-Basin: ${activeSelected?.stationId} · Total Latency: ${activeSelected?.latencyMs} ms · Execution Status: ${activeSelected?.status}`}
+          width="max-w-2xl"
+        >
+          {activeSelected && <InferenceTrace request={activeSelected} />}
         </Dialog>
       </div>
     </RoleGate>

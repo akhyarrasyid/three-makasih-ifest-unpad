@@ -564,7 +564,7 @@ export function MapLibreWatershed({
                   onClick={() => navigateToLevel("BGS")}
                   className={cn("px-1.5 py-0.5 rounded transition-colors hover:text-water", activeLevel === "BGS" ? "bg-surface-2 text-water font-semibold" : "text-fg-subtle")}
                 >
-                  Bengawan Solo
+                  Regional Basin DAG
                 </button>
                 {selectedNode && (
                   <>
@@ -736,16 +736,16 @@ export function MapLibreWatershed({
 
             <div className="grid grid-cols-3 gap-2">
               <div className="rounded border border-border bg-surface-1 p-2">
-                <div className="t-label">Current TMA</div>
-                <div className="mono text-base mt-0.5">{selectedNode.currentTma.toFixed(2)} m</div>
+                <div className="t-label">Water Supply</div>
+                <div className="mono text-base mt-0.5">{selectedNode.currentSupply.toFixed(0)} m³/s</div>
               </div>
               <div className="rounded border border-border bg-surface-1 p-2">
-                <div className="t-label">+6h Forecast</div>
-                <div className="mono text-base mt-0.5 text-water">{selectedNode.forecast6h.toFixed(2)} m</div>
+                <div className="t-label">Next-Month Risk</div>
+                <div className="mono text-base mt-0.5 text-water">{(selectedNode.riskScore * 100).toFixed(0)}%</div>
               </div>
               <div className="rounded border border-border bg-surface-1 p-2">
-                <div className="t-label">+24h Forecast</div>
-                <div className="mono text-base mt-0.5 text-water">{selectedNode.forecast24h.toFixed(2)} m</div>
+                <div className="t-label">Risk Tier</div>
+                <div className="mono text-base mt-0.5 uppercase">{selectedNode.risk}</div>
               </div>
             </div>
 

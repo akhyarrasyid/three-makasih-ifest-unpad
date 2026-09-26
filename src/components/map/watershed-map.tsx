@@ -14,7 +14,7 @@ const DynamicMapLibreWatershed = dynamic(
       <div className="relative h-full w-full min-h-[420px] bg-surface-1 flex flex-col items-center justify-center p-6 border border-border">
         <div className="flex items-center gap-2.5 font-mono text-xs text-fg-subtle">
           <span className="h-2 w-2 rounded-full bg-water animate-pulse" />
-          <span>Initializing MapLibre GL engine · Bengawan Solo basin...</span>
+          <span>Initializing MapLibre GL engine · Regional Sub-Basin Hydrography...</span>
         </div>
       </div>
     ),

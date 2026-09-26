@@ -1,37 +1,69 @@
-// Precomputed static geospatial data & network topology for ANCHOR River Network workspace
-// All 30 stations, 24 primary tree edges, and simplified cartography
+// Precomputed static geospatial data & network topology for TIRTA River Network workspace
+// 42 representative HUC12 sub-basin DAG nodes, directed downstream edges (id -> to_id),
+// multi-hop reachability lookups, and catchment cartography.
 
-export interface StaticStation {
-  id: string;
+import type { BasinCategory, RiskLevel, ForecastStrategy } from "@/types/domain";
+
+export interface StaticBasinNode {
+  id: string; // e.g. "HUC-DEMO-0001"
   name: string;
   code: string;
+  x: number; // SVG canvas coordinate 0..1200
+  y: number; // SVG canvas coordinate 0..700
   latitude: number;
   longitude: number;
-  x: number;
-  y: number;
-  category: "DAM_WEIR" | "MIXED" | "NATURAL";
+  category: BasinCategory;
   river: string;
   basin: string;
+  subBasin: string;
   primary: boolean;
   elevationM: number;
   catchmentKm2: number;
+  graphDepth: number;
+  headwater: boolean;
+  outletDistanceKm: number;
+  coldStart: boolean; // absent from training history
+  downstreamId: string | null;
+  upstreamIds: string[];
+  ancestors: string[];
+  descendants: string[];
+  // Baseline hydrological attributes
+  climatology: number; // mm/mo
+  currentSupply: number;
+  streamflow: number;
+  baseflow: number;
+  quickflow: number;
+  irrigationWithdrawal: number;
+  publicSupplyWithdrawal: number;
+  thermoelectricWithdrawal: number;
+  totalWithdrawal: number;
+  availabilityProxy: number;
+  waterLimitationProxy: number;
+  riskScore: number;
+  risk: RiskLevel;
+  confidence: number;
+  strategy: ForecastStrategy;
+  // Aliases for component compatibility
   alertThreshold: number;
   warningThreshold: number;
   currentTma: number;
   forecast6h: number;
   forecast24h: number;
-  risk: "LOW" | "MODERATE" | "HIGH" | "CRITICAL";
-  strategy: "CLIMATOLOGY" | "HYBRID" | "DIRECT_MULTI_HORIZON";
   upstreamStations: string[];
   downstreamStations: string[];
-  ancestors: string[];
-  descendants: string[];
+  basinAreaKm2: number;
+  population: number;
+  supplyRatio: number;
+  climatologyAnomalySigma: number;
+  downstreamStationId: string | null;
 }
+
+export type StaticStation = StaticBasinNode;
 
 export interface StaticEdge {
   id: string;
-  source: string;
-  target: string;
+  source: string; // upstream
+  target: string; // downstream receiving node
   sourceName: string;
   targetName: string;
   river: string;
@@ -48,1825 +80,396 @@ export interface StaticEdge {
 export interface StaticRiver {
   id: string;
   name: string;
-  type: string;
+  type: "mainstem" | "tributary" | "headwater_channel";
   order: number;
   path: string;
 }
 
 export const NETWORK_METRICS = {
-  totalStations: 30,
-  primaryStations: 25,
-  outsideStations: 5,
-  connectedComponents: 1,
-  primaryNodes: 25,
-  primaryEdges: 24,
-  meanSpacingKm: 22.3,
-  coveragePercent: 83.3,
-  basinAreaKm2: 16100,
-  meanResidualCorrelation: 0.854,
+  totalForecastHuc12: 2982,
+  historicalHuc12: 2196,
+  demoNetworkNodes: 42,
+  demoDirectedEdges: 41,
+  headwaterNodesCount: 14,
+  outletNodesCount: 2,
+  maxGraphDepth: 7,
+  meanUpstreamDegree: 1.14,
+  coldStartNodesCount: 8,
+  reachabilityHops: 3,
+  catchmentAreaKm2: 24800,
+  inferredAnnualCycle: "September → August",
+  // Compatibility aliases
+  totalStations: 42,
+  primaryStations: 36,
+  outsideStations: 6,
+  demoSubBasins: 42,
+  totalTestHuc12: 2982,
+  directedEdges: 41,
+  headwaterNodes: 14,
+  outletNodes: 2,
+  coldStartNodes: 8,
+  meanSpacingKm: 18.4,
+  coveragePercent: 100,
 } as const;
 
 export const STATIC_BASEMAP = {
   width: 1200,
   height: 700,
-  javaPath: "M-1430.301,-240.092L-1178.759,-229.253L-1035.021,-156.982L-783.479,-131.68L-496.003,-48.523L-280.396,96.189L-100.723,107.047L186.753,132.386L330.491,-66.604L546.098,23.818L725.771,96.189L942.097,108.495L1085.116,157.728L1408.527,114.286L1624.134,404.114L1685.223,749.001L1552.265,785.354L1408.527,640L1156.985,621.841L941.378,640L689.836,614.579L420.327,603.685L222.687,567.379L7.08,433.126L-244.461,411.367L-460.068,404.114L-603.807,331.608L-891.283,241.023L-1106.89,168.59L-1322.497,132.386L-1681.842,60L-1717.777,-120.836Z",
-  basinPath: "M341.271,567.379L294.557,494.795L240.655,447.634L197.533,396.862L186.753,349.732L222.687,302.615L283.776,259.136L366.426,215.668L438.295,179.453L510.164,143.246L600,96.189L689.836,85.332L779.673,78.094L869.509,85.332L952.158,96.189L977.313,132.386L959.345,186.695L905.443,230.156L833.574,259.136L725.771,313.487L671.869,385.985L643.121,458.516L582.033,520.196L510.164,556.489L438.295,578.27Z",
-  provincesPath: "M546.098,78.094L556.879,150.487L582.033,204.802L592.813,259.136L545.02,296.093L510.164,331.608L474.229,367.857L449.075,440.38L438.295,512.938L427.514,585.531M546.098,78.094L556.879,150.487L582.033,204.802L592.813,259.136L545.02,296.093L510.164,331.608L474.229,367.857L449.075,440.38L438.295,512.938L427.514,585.531",
+  // Catchment watershed boundary contour (SVG path)
+  basinPath:
+    "M180,190 C220,120 360,70 520,60 C690,50 870,80 1020,130 C1110,160 1150,250 1120,380 C1090,510 990,620 840,650 C680,680 480,650 340,590 C210,530 140,430 140,320 C140,260 160,220 180,190 Z",
+  subBasinDivisions: [
+    "M360,70 C410,210 440,320 460,420",
+    "M690,50 C680,180 670,300 660,420",
+    "M870,80 C840,220 820,340 800,480",
+    "M340,590 C460,540 600,490 740,460",
+  ],
 };
 
 export const STATIC_RIVERS: StaticRiver[] = [
   {
-    "id": "RIV-MAINSTEM",
-    "name": "Kali Bengawan Solo",
-    "type": "mainstem",
-    "order": 5,
-    "path": "M359.598,451.987L355.645,444.007L350.255,433.126L344.865,422.246L340.912,412.092L335.881,407.741L330.85,403.752L328.694,389.61L330.491,375.108L332.288,364.232L333.366,355.532L341.271,342.482L355.645,329.796L373.612,317.111L391.939,305.514L413.14,297.18L434.701,291.744L456.262,289.932L474.948,288.845L495.79,289.932L517.351,293.556L531.724,295.368L545.02,296.093L553.285,280.874L564.065,262.758L574.846,244.645L585.626,226.534L597.125,205.527L614.374,212.046L636.653,223.274L653.902,217.479L675.463,210.235L701.335,205.165L725.771,201.181L750.925,199.37L776.079,195.749L801.952,191.041L819.201,179.453L833.574,168.59L852.26,158.09L873.102,152.297L898.257,148.677L929.879,143.97L935.988,132.386L939.581,119.716L942.097,108.495"
+    id: "RIV-MAINSTEM",
+    name: "Mainstem Central Corridor",
+    type: "mainstem",
+    order: 5,
+    path: "M280,260 L380,290 L480,310 L580,330 L690,350 L800,380 L920,400 L1020,410 L1080,420",
   },
   {
-    "id": "RIV-MADIUN",
-    "name": "Kali Madiun",
-    "type": "tributary",
-    "order": 4,
-    "path": "M522.022,465.409L531.724,465.771L542.505,466.497L552.566,464.683L556.879,447.634L562.269,425.873L567.659,404.114L572.33,378.008L567.659,358.794L557.597,339.22L551.488,317.111L545.02,296.093"
+    id: "RIV-NORTH-TRIB",
+    name: "Northern Ridge Tributary",
+    type: "tributary",
+    order: 3,
+    path: "M320,130 L400,180 L480,230 L580,330",
   },
   {
-    "id": "RIV-DENGKENG",
-    "name": "Kali Dengkeng",
-    "type": "tributary",
-    "order": 3,
-    "path": "M233.468,418.62L258.622,407.741L284.495,397.225L305.337,382.359L319.711,367.857L333.366,355.532"
+    id: "RIV-EAST-HIGHLAND",
+    name: "Eastern Highland Fork",
+    type: "tributary",
+    order: 4,
+    path: "M880,150 L840,240 L810,310 L800,380",
   },
   {
-    "id": "RIV-PEPE",
-    "name": "Kali Pepe",
-    "type": "tributary",
-    "order": 3,
-    "path": "M240.655,338.857L269.402,344.294L298.15,347.919L323.664,350.457L333.366,355.532"
+    id: "RIV-SOUTH-TRIB",
+    name: "Southern Valley Branch",
+    type: "tributary",
+    order: 3,
+    path: "M360,510 L460,470 L570,420 L690,350",
   },
   {
-    "id": "RIV-SAMIN",
-    "name": "Kali Samin",
-    "type": "tributary",
-    "order": 2,
-    "path": "M427.514,382.359L402.36,378.733L366.785,375.47L344.865,364.232L333.366,355.532"
+    id: "RIV-DELTA-CHANNEL",
+    name: "Coastal Delta Estuary",
+    type: "mainstem",
+    order: 5,
+    path: "M920,400 L1000,440 L1070,470",
   },
-  {
-    "id": "RIV-KEDUANG",
-    "name": "Kali Keduang",
-    "type": "tributary",
-    "order": 3,
-    "path": "M449.075,425.873L427.514,433.126L402.36,438.567L385.83,441.106L366.426,447.634L359.598,451.987"
-  },
-  {
-    "id": "RIV-TIRTOMOYO",
-    "name": "Kali Tirtomoyo",
-    "type": "tributary",
-    "order": 2,
-    "path": "M438.295,520.196L420.327,505.68L403.079,487.901L380.799,469.399L359.598,451.987"
-  },
-  {
-    "id": "RIV-GANDONG",
-    "name": "Kali Gandong",
-    "type": "tributary",
-    "order": 2,
-    "path": "M474.229,382.359L499.383,375.108L527.412,368.582L542.505,353.357L557.597,339.22"
-  },
-  {
-    "id": "RIV-KENING",
-    "name": "Kali Kening",
-    "type": "tributary",
-    "order": 3,
-    "path": "M653.902,96.189L671.869,114.286L690.555,133.11L695.226,157.728L698.82,181.264L701.335,205.165"
-  },
-  {
-    "id": "RIV-JERO",
-    "name": "Bengawan Jero",
-    "type": "tributary",
-    "order": 2,
-    "path": "M905.443,193.938L887.476,181.264L870.228,169.314L858.729,163.159L852.26,158.09"
-  },
-  {
-    "id": "RIV-LAMONG",
-    "name": "Kali Lamong",
-    "type": "distributary",
-    "order": 2,
-    "path": "M815.607,251.89L858.729,241.023L901.85,231.967L942.097,223.636L977.313,217.479"
-  },
-  {
-    "id": "RIV-GRINDULU",
-    "name": "Kali Grindulu",
-    "type": "basin_boundary_river",
-    "order": 2,
-    "path": "M474.229,531.083L449.075,556.489L421.046,582.264L413.14,594.608"
-  }
 ];
 
-export const STATIC_STATIONS: StaticStation[] = [
-  {
-    "id": "BS-001",
-    "name": "Wonogiri Dam",
-    "code": "BS-001",
-    "latitude": -7.832,
-    "longitude": 110.931,
-    "x": 359.6,
-    "y": 452,
-    "category": "DAM_WEIR",
-    "river": "Bengawan Solo Hulu",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 136,
-    "catchmentKm2": 1350,
-    "alertThreshold": 6.4,
-    "warningThreshold": 5.12,
-    "currentTma": 4.16,
-    "forecast6h": 4.37,
-    "forecast24h": 4.66,
-    "risk": "LOW",
-    "strategy": "CLIMATOLOGY",
-    "upstreamStations": [
-      "BS-021",
-      "BS-022"
-    ],
-    "downstreamStations": [
-      "BS-002"
-    ],
-    "ancestors": [
-      "BS-021",
-      "BS-022"
-    ],
-    "descendants": [
-      "BS-002",
-      "BS-003",
-      "BS-004",
-      "BS-007",
-      "BS-025",
-      "BS-011",
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-002",
-    "name": "Nguter",
-    "code": "BS-002",
-    "latitude": -7.722,
-    "longitude": 110.879,
-    "x": 340.9,
-    "y": 412.1,
-    "category": "NATURAL",
-    "river": "Bengawan Solo Hulu",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 112,
-    "catchmentKm2": 1610,
-    "alertThreshold": 5.6,
-    "warningThreshold": 4.48,
-    "currentTma": 3.6399999999999997,
-    "forecast6h": 3.82,
-    "forecast24h": 4.08,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [
-      "BS-001"
-    ],
-    "downstreamStations": [
-      "BS-003"
-    ],
-    "ancestors": [
-      "BS-001",
-      "BS-021",
-      "BS-022"
-    ],
-    "descendants": [
-      "BS-003",
-      "BS-004",
-      "BS-007",
-      "BS-025",
-      "BS-011",
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-003",
-    "name": "Colo Weir",
-    "code": "BS-003",
-    "latitude": -7.699,
-    "longitude": 110.851,
-    "x": 330.9,
-    "y": 403.8,
-    "category": "DAM_WEIR",
-    "river": "Bengawan Solo Hulu",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 104,
-    "catchmentKm2": 1720,
-    "alertThreshold": 4.8,
-    "warningThreshold": 3.84,
-    "currentTma": 3.12,
-    "forecast6h": 3.28,
-    "forecast24h": 3.49,
-    "risk": "LOW",
-    "strategy": "CLIMATOLOGY",
-    "upstreamStations": [
-      "BS-002"
-    ],
-    "downstreamStations": [
-      "BS-004"
-    ],
-    "ancestors": [
-      "BS-002",
-      "BS-001",
-      "BS-021",
-      "BS-022"
-    ],
-    "descendants": [
-      "BS-004",
-      "BS-007",
-      "BS-025",
-      "BS-011",
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-004",
-    "name": "Jurug",
-    "code": "BS-004",
-    "latitude": -7.566,
-    "longitude": 110.858,
-    "x": 333.4,
-    "y": 355.5,
-    "category": "NATURAL",
-    "river": "Bengawan Solo",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 88,
-    "catchmentKm2": 3210,
-    "alertThreshold": 8.5,
-    "warningThreshold": 6.8,
-    "currentTma": 5.525,
-    "forecast6h": 5.8,
-    "forecast24h": 6.19,
-    "risk": "HIGH",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [
-      "BS-003",
-      "BS-005",
-      "BS-020"
-    ],
-    "downstreamStations": [
-      "BS-007"
-    ],
-    "ancestors": [
-      "BS-003",
-      "BS-005",
-      "BS-020",
-      "BS-002",
-      "BS-001",
-      "BS-021",
-      "BS-022"
-    ],
-    "descendants": [
-      "BS-007",
-      "BS-025",
-      "BS-011",
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-005",
-    "name": "Dengkeng",
-    "code": "BS-005",
-    "latitude": -7.681,
-    "longitude": 110.722,
-    "x": 284.5,
-    "y": 397.2,
-    "category": "NATURAL",
-    "river": "Kali Dengkeng",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 132,
-    "catchmentKm2": 760,
-    "alertThreshold": 4.2,
-    "warningThreshold": 3.36,
-    "currentTma": 2.7300000000000004,
-    "forecast6h": 2.87,
-    "forecast24h": 3.06,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [],
-    "downstreamStations": [
-      "BS-004"
-    ],
-    "ancestors": [],
-    "descendants": [
-      "BS-004",
-      "BS-007",
-      "BS-025",
-      "BS-011",
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-006",
-    "name": "Pepe Hilir",
-    "code": "BS-006",
-    "latitude": -7.552,
-    "longitude": 110.831,
-    "x": 323.7,
-    "y": 350.5,
-    "category": "MIXED",
-    "river": "Kali Pepe",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 92,
-    "catchmentKm2": 310,
-    "alertThreshold": 3.6,
-    "warningThreshold": 2.88,
-    "currentTma": 2.3400000000000003,
-    "forecast6h": 2.46,
-    "forecast24h": 2.62,
-    "risk": "LOW",
-    "strategy": "HYBRID",
-    "upstreamStations": [],
-    "downstreamStations": [
-      "BS-007"
-    ],
-    "ancestors": [],
-    "descendants": [
-      "BS-007",
-      "BS-025",
-      "BS-011",
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-007",
-    "name": "Sragen",
-    "code": "BS-007",
-    "latitude": -7.428,
-    "longitude": 111.021,
-    "x": 391.9,
-    "y": 305.5,
-    "category": "NATURAL",
-    "river": "Bengawan Solo",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 74,
-    "catchmentKm2": 4020,
-    "alertThreshold": 9.2,
-    "warningThreshold": 7.36,
-    "currentTma": 5.9799999999999995,
-    "forecast6h": 6.28,
-    "forecast24h": 6.7,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [
-      "BS-004",
-      "BS-006"
-    ],
-    "downstreamStations": [
-      "BS-025"
-    ],
-    "ancestors": [
-      "BS-004",
-      "BS-006",
-      "BS-003",
-      "BS-005",
-      "BS-020",
-      "BS-002",
-      "BS-001",
-      "BS-021",
-      "BS-022"
-    ],
-    "descendants": [
-      "BS-025",
-      "BS-011",
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-008",
-    "name": "Badegan",
-    "code": "BS-008",
-    "latitude": -7.869,
-    "longitude": 111.383,
-    "x": 522,
-    "y": 465.4,
-    "category": "NATURAL",
-    "river": "Kali Madiun Hulu",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 214,
-    "catchmentKm2": 420,
-    "alertThreshold": 3.8,
-    "warningThreshold": 3.04,
-    "currentTma": 2.4699999999999998,
-    "forecast6h": 2.59,
-    "forecast24h": 2.77,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [],
-    "downstreamStations": [
-      "BS-009"
-    ],
-    "ancestors": [],
-    "descendants": [
-      "BS-009",
-      "BS-010",
-      "BS-012",
-      "BS-011",
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-009",
-    "name": "Ponorogo",
-    "code": "BS-009",
-    "latitude": -7.867,
-    "longitude": 111.468,
-    "x": 552.6,
-    "y": 464.7,
-    "category": "NATURAL",
-    "river": "Kali Madiun",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 152,
-    "catchmentKm2": 890,
-    "alertThreshold": 4.6,
-    "warningThreshold": 3.68,
-    "currentTma": 2.9899999999999998,
-    "forecast6h": 3.14,
-    "forecast24h": 3.35,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [
-      "BS-008"
-    ],
-    "downstreamStations": [
-      "BS-010"
-    ],
-    "ancestors": [
-      "BS-008"
-    ],
-    "descendants": [
-      "BS-010",
-      "BS-012",
-      "BS-011",
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-010",
-    "name": "Madiun",
-    "code": "BS-010",
-    "latitude": -7.628,
-    "longitude": 111.523,
-    "x": 572.3,
-    "y": 378,
-    "category": "MIXED",
-    "river": "Kali Madiun",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 68,
-    "catchmentKm2": 2180,
-    "alertThreshold": 6.1,
-    "warningThreshold": 4.88,
-    "currentTma": 3.965,
-    "forecast6h": 4.16,
-    "forecast24h": 4.44,
-    "risk": "LOW",
-    "strategy": "HYBRID",
-    "upstreamStations": [
-      "BS-009"
-    ],
-    "downstreamStations": [
-      "BS-012"
-    ],
-    "ancestors": [
-      "BS-009",
-      "BS-008"
-    ],
-    "descendants": [
-      "BS-012",
-      "BS-011",
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-011",
-    "name": "Ngawi Confluence",
-    "code": "BS-011",
-    "latitude": -7.402,
-    "longitude": 111.447,
-    "x": 545,
-    "y": 296.1,
-    "category": "NATURAL",
-    "river": "Bengawan Solo",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 52,
-    "catchmentKm2": 8460,
-    "alertThreshold": 11.8,
-    "warningThreshold": 9.44,
-    "currentTma": 7.670000000000001,
-    "forecast6h": 8.05,
-    "forecast24h": 8.59,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [
-      "BS-012",
-      "BS-025"
-    ],
-    "downstreamStations": [
-      "BS-014"
-    ],
-    "ancestors": [
-      "BS-012",
-      "BS-025",
-      "BS-010",
-      "BS-013",
-      "BS-007",
-      "BS-009",
-      "BS-004",
-      "BS-006",
-      "BS-008",
-      "BS-003",
-      "BS-005",
-      "BS-020",
-      "BS-002",
-      "BS-001",
-      "BS-021",
-      "BS-022"
-    ],
-    "descendants": [
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-012",
-    "name": "Kwadungan",
-    "code": "BS-012",
-    "latitude": -7.521,
-    "longitude": 111.482,
-    "x": 557.6,
-    "y": 339.2,
-    "category": "NATURAL",
-    "river": "Kali Madiun",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 58,
-    "catchmentKm2": 3140,
-    "alertThreshold": 7.4,
-    "warningThreshold": 5.92,
-    "currentTma": 4.8100000000000005,
-    "forecast6h": 5.05,
-    "forecast24h": 5.39,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [
-      "BS-010",
-      "BS-013"
-    ],
-    "downstreamStations": [
-      "BS-011"
-    ],
-    "ancestors": [
-      "BS-010",
-      "BS-013",
-      "BS-009",
-      "BS-008"
-    ],
-    "descendants": [
-      "BS-011",
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-013",
-    "name": "Gandong Weir",
-    "code": "BS-013",
-    "latitude": -7.602,
-    "longitude": 111.398,
-    "x": 527.4,
-    "y": 368.6,
-    "category": "DAM_WEIR",
-    "river": "Kali Gandong",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 96,
-    "catchmentKm2": 340,
-    "alertThreshold": 3.2,
-    "warningThreshold": 2.56,
-    "currentTma": 2.08,
-    "forecast6h": 2.18,
-    "forecast24h": 2.33,
-    "risk": "LOW",
-    "strategy": "CLIMATOLOGY",
-    "upstreamStations": [],
-    "downstreamStations": [
-      "BS-012"
-    ],
-    "ancestors": [],
-    "descendants": [
-      "BS-012",
-      "BS-011",
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-014",
-    "name": "Cepu",
-    "code": "BS-014",
-    "latitude": -7.152,
-    "longitude": 111.592,
-    "x": 597.1,
-    "y": 205.5,
-    "category": "NATURAL",
-    "river": "Bengawan Solo",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 34,
-    "catchmentKm2": 9820,
-    "alertThreshold": 12.6,
-    "warningThreshold": 10.08,
-    "currentTma": 8.19,
-    "forecast6h": 8.6,
-    "forecast24h": 9.17,
-    "risk": "MODERATE",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [
-      "BS-011"
-    ],
-    "downstreamStations": [
-      "BS-024"
-    ],
-    "ancestors": [
-      "BS-011",
-      "BS-012",
-      "BS-025",
-      "BS-010",
-      "BS-013",
-      "BS-007",
-      "BS-009",
-      "BS-004",
-      "BS-006",
-      "BS-008",
-      "BS-003",
-      "BS-005",
-      "BS-020",
-      "BS-002",
-      "BS-001",
-      "BS-021",
-      "BS-022"
-    ],
-    "descendants": [
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-015",
-    "name": "Bojonegoro Barrage",
-    "code": "BS-015",
-    "latitude": -7.151,
-    "longitude": 111.882,
-    "x": 701.3,
-    "y": 205.2,
-    "category": "DAM_WEIR",
-    "river": "Bengawan Solo",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 22,
-    "catchmentKm2": 11400,
-    "alertThreshold": 13.5,
-    "warningThreshold": 10.8,
-    "currentTma": 8.775,
-    "forecast6h": 9.21,
-    "forecast24h": 9.83,
-    "risk": "LOW",
-    "strategy": "CLIMATOLOGY",
-    "upstreamStations": [
-      "BS-023",
-      "BS-024"
-    ],
-    "downstreamStations": [
-      "BS-016"
-    ],
-    "ancestors": [
-      "BS-023",
-      "BS-024",
-      "BS-014",
-      "BS-011",
-      "BS-012",
-      "BS-025",
-      "BS-010",
-      "BS-013",
-      "BS-007",
-      "BS-009",
-      "BS-004",
-      "BS-006",
-      "BS-008",
-      "BS-003",
-      "BS-005",
-      "BS-020",
-      "BS-002",
-      "BS-001",
-      "BS-021",
-      "BS-022"
-    ],
-    "descendants": [
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-016",
-    "name": "Babat Barrage",
-    "code": "BS-016",
-    "latitude": -7.112,
-    "longitude": 112.162,
-    "x": 802,
-    "y": 191,
-    "category": "DAM_WEIR",
-    "river": "Bengawan Solo Hilir",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 14,
-    "catchmentKm2": 12300,
-    "alertThreshold": 7.9,
-    "warningThreshold": 6.32,
-    "currentTma": 5.135000000000001,
-    "forecast6h": 5.39,
-    "forecast24h": 5.75,
-    "risk": "LOW",
-    "strategy": "CLIMATOLOGY",
-    "upstreamStations": [
-      "BS-015"
-    ],
-    "downstreamStations": [
-      "BS-017"
-    ],
-    "ancestors": [
-      "BS-015",
-      "BS-023",
-      "BS-024",
-      "BS-014",
-      "BS-011",
-      "BS-012",
-      "BS-025",
-      "BS-010",
-      "BS-013",
-      "BS-007",
-      "BS-009",
-      "BS-004",
-      "BS-006",
-      "BS-008",
-      "BS-003",
-      "BS-005",
-      "BS-020",
-      "BS-002",
-      "BS-001",
-      "BS-021",
-      "BS-022"
-    ],
-    "descendants": [
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-017",
-    "name": "Karanggeneng",
-    "code": "BS-017",
-    "latitude": -7.021,
-    "longitude": 112.302,
-    "x": 852.3,
-    "y": 158.1,
-    "category": "MIXED",
-    "river": "Bengawan Solo Hilir",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 8,
-    "catchmentKm2": 13100,
-    "alertThreshold": 5.8,
-    "warningThreshold": 4.64,
-    "currentTma": 3.77,
-    "forecast6h": 3.96,
-    "forecast24h": 4.22,
-    "risk": "LOW",
-    "strategy": "HYBRID",
-    "upstreamStations": [
-      "BS-016"
-    ],
-    "downstreamStations": [
-      "BS-018"
-    ],
-    "ancestors": [
-      "BS-016",
-      "BS-015",
-      "BS-023",
-      "BS-024",
-      "BS-014",
-      "BS-011",
-      "BS-012",
-      "BS-025",
-      "BS-010",
-      "BS-013",
-      "BS-007",
-      "BS-009",
-      "BS-004",
-      "BS-006",
-      "BS-008",
-      "BS-003",
-      "BS-005",
-      "BS-020",
-      "BS-002",
-      "BS-001",
-      "BS-021",
-      "BS-022"
-    ],
-    "descendants": [
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-018",
-    "name": "Sembayat Barrage",
-    "code": "BS-018",
-    "latitude": -6.982,
-    "longitude": 112.518,
-    "x": 929.9,
-    "y": 144,
-    "category": "DAM_WEIR",
-    "river": "Bengawan Solo Hilir",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 4,
-    "catchmentKm2": 15600,
-    "alertThreshold": 4.4,
-    "warningThreshold": 3.52,
-    "currentTma": 2.8600000000000003,
-    "forecast6h": 3,
-    "forecast24h": 3.2,
-    "risk": "LOW",
-    "strategy": "CLIMATOLOGY",
-    "upstreamStations": [
-      "BS-017"
-    ],
-    "downstreamStations": [
-      "BS-019"
-    ],
-    "ancestors": [
-      "BS-017",
-      "BS-016",
-      "BS-015",
-      "BS-023",
-      "BS-024",
-      "BS-014",
-      "BS-011",
-      "BS-012",
-      "BS-025",
-      "BS-010",
-      "BS-013",
-      "BS-007",
-      "BS-009",
-      "BS-004",
-      "BS-006",
-      "BS-008",
-      "BS-003",
-      "BS-005",
-      "BS-020",
-      "BS-002",
-      "BS-001",
-      "BS-021",
-      "BS-022"
-    ],
-    "descendants": [
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-019",
-    "name": "Ujung Pangkah Estuary",
-    "code": "BS-019",
-    "latitude": -6.884,
-    "longitude": 112.552,
-    "x": 942.1,
-    "y": 108.5,
-    "category": "NATURAL",
-    "river": "Bengawan Solo Hilir",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 1,
-    "catchmentKm2": 16100,
-    "alertThreshold": 3.1,
-    "warningThreshold": 2.48,
-    "currentTma": 2.015,
-    "forecast6h": 2.12,
-    "forecast24h": 2.26,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [
-      "BS-018"
-    ],
-    "downstreamStations": [],
-    "ancestors": [
-      "BS-018",
-      "BS-017",
-      "BS-016",
-      "BS-015",
-      "BS-023",
-      "BS-024",
-      "BS-014",
-      "BS-011",
-      "BS-012",
-      "BS-025",
-      "BS-010",
-      "BS-013",
-      "BS-007",
-      "BS-009",
-      "BS-004",
-      "BS-006",
-      "BS-008",
-      "BS-003",
-      "BS-005",
-      "BS-020",
-      "BS-002",
-      "BS-001",
-      "BS-021",
-      "BS-022"
-    ],
-    "descendants": []
-  },
-  {
-    "id": "BS-020",
-    "name": "Samin",
-    "code": "BS-020",
-    "latitude": -7.621,
-    "longitude": 110.951,
-    "x": 366.8,
-    "y": 375.5,
-    "category": "NATURAL",
-    "river": "Kali Samin",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 118,
-    "catchmentKm2": 280,
-    "alertThreshold": 3.4,
-    "warningThreshold": 2.72,
-    "currentTma": 2.21,
-    "forecast6h": 2.32,
-    "forecast24h": 2.48,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [],
-    "downstreamStations": [
-      "BS-004"
-    ],
-    "ancestors": [],
-    "descendants": [
-      "BS-004",
-      "BS-007",
-      "BS-025",
-      "BS-011",
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-021",
-    "name": "Keduang",
-    "code": "BS-021",
-    "latitude": -7.802,
-    "longitude": 111.004,
-    "x": 385.8,
-    "y": 441.1,
-    "category": "NATURAL",
-    "river": "Kali Keduang",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 168,
-    "catchmentKm2": 420,
-    "alertThreshold": 3.9,
-    "warningThreshold": 3.12,
-    "currentTma": 2.535,
-    "forecast6h": 2.66,
-    "forecast24h": 2.84,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [],
-    "downstreamStations": [
-      "BS-001"
-    ],
-    "ancestors": [],
-    "descendants": [
-      "BS-001",
-      "BS-002",
-      "BS-003",
-      "BS-004",
-      "BS-007",
-      "BS-025",
-      "BS-011",
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-022",
-    "name": "Tirtomoyo",
-    "code": "BS-022",
-    "latitude": -7.931,
-    "longitude": 111.052,
-    "x": 403.1,
-    "y": 487.9,
-    "category": "NATURAL",
-    "river": "Kali Tirtomoyo",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 186,
-    "catchmentKm2": 230,
-    "alertThreshold": 3.5,
-    "warningThreshold": 2.8,
-    "currentTma": 2.275,
-    "forecast6h": 2.39,
-    "forecast24h": 2.55,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [],
-    "downstreamStations": [
-      "BS-001"
-    ],
-    "ancestors": [],
-    "descendants": [
-      "BS-001",
-      "BS-002",
-      "BS-003",
-      "BS-004",
-      "BS-007",
-      "BS-025",
-      "BS-011",
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-023",
-    "name": "Kening",
-    "code": "BS-023",
-    "latitude": -6.952,
-    "longitude": 111.852,
-    "x": 690.6,
-    "y": 133.1,
-    "category": "NATURAL",
-    "river": "Kali Kening",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 28,
-    "catchmentKm2": 510,
-    "alertThreshold": 4.1,
-    "warningThreshold": 3.28,
-    "currentTma": 2.665,
-    "forecast6h": 2.8,
-    "forecast24h": 2.98,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [],
-    "downstreamStations": [
-      "BS-015"
-    ],
-    "ancestors": [],
-    "descendants": [
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-024",
-    "name": "Padangan",
-    "code": "BS-024",
-    "latitude": -7.201,
-    "longitude": 111.702,
-    "x": 636.7,
-    "y": 223.3,
-    "category": "MIXED",
-    "river": "Bengawan Solo",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 28,
-    "catchmentKm2": 10600,
-    "alertThreshold": 12.9,
-    "warningThreshold": 10.32,
-    "currentTma": 8.385,
-    "forecast6h": 8.8,
-    "forecast24h": 9.39,
-    "risk": "LOW",
-    "strategy": "HYBRID",
-    "upstreamStations": [
-      "BS-014"
-    ],
-    "downstreamStations": [
-      "BS-015"
-    ],
-    "ancestors": [
-      "BS-014",
-      "BS-011",
-      "BS-012",
-      "BS-025",
-      "BS-010",
-      "BS-013",
-      "BS-007",
-      "BS-009",
-      "BS-004",
-      "BS-006",
-      "BS-008",
-      "BS-003",
-      "BS-005",
-      "BS-020",
-      "BS-002",
-      "BS-001",
-      "BS-021",
-      "BS-022"
-    ],
-    "descendants": [
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-025",
-    "name": "Widodaren",
-    "code": "BS-025",
-    "latitude": -7.382,
-    "longitude": 111.252,
-    "x": 474.9,
-    "y": 288.8,
-    "category": "NATURAL",
-    "river": "Bengawan Solo",
-    "basin": "Bengawan Solo",
-    "primary": true,
-    "elevationM": 62,
-    "catchmentKm2": 4680,
-    "alertThreshold": 9.8,
-    "warningThreshold": 7.84,
-    "currentTma": 6.370000000000001,
-    "forecast6h": 6.69,
-    "forecast24h": 7.13,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [
-      "BS-007"
-    ],
-    "downstreamStations": [
-      "BS-011"
-    ],
-    "ancestors": [
-      "BS-007",
-      "BS-004",
-      "BS-006",
-      "BS-003",
-      "BS-005",
-      "BS-020",
-      "BS-002",
-      "BS-001",
-      "BS-021",
-      "BS-022"
-    ],
-    "descendants": [
-      "BS-011",
-      "BS-014",
-      "BS-024",
-      "BS-015",
-      "BS-016",
-      "BS-017",
-      "BS-018",
-      "BS-019"
-    ]
-  },
-  {
-    "id": "BS-026",
-    "name": "Grindulu",
-    "code": "BS-026",
-    "latitude": -8.191,
-    "longitude": 111.102,
-    "x": 421,
-    "y": 582.3,
-    "category": "NATURAL",
-    "river": "Kali Grindulu",
-    "basin": "Grindulu Basin",
-    "primary": false,
-    "elevationM": 42,
-    "catchmentKm2": 620,
-    "alertThreshold": 4.3,
-    "warningThreshold": 3.44,
-    "currentTma": 2.795,
-    "forecast6h": 2.85,
-    "forecast24h": 2.91,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [],
-    "downstreamStations": [],
-    "ancestors": [],
-    "descendants": []
-  },
-  {
-    "id": "BS-027",
-    "name": "Lorog",
-    "code": "BS-027",
-    "latitude": -8.202,
-    "longitude": 111.252,
-    "x": 474.9,
-    "y": 586.3,
-    "category": "NATURAL",
-    "river": "Kali Lorog",
-    "basin": "Lorog Basin",
-    "primary": false,
-    "elevationM": 36,
-    "catchmentKm2": 290,
-    "alertThreshold": 3.7,
-    "warningThreshold": 2.96,
-    "currentTma": 2.4050000000000002,
-    "forecast6h": 2.45,
-    "forecast24h": 2.5,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [],
-    "downstreamStations": [],
-    "ancestors": [],
-    "descendants": []
-  },
-  {
-    "id": "BS-028",
-    "name": "Lamong Hilir",
-    "code": "BS-028",
-    "latitude": -7.202,
-    "longitude": 112.552,
-    "x": 942.1,
-    "y": 223.6,
-    "category": "MIXED",
-    "river": "Kali Lamong",
-    "basin": "Lamong Basin",
-    "primary": false,
-    "elevationM": 6,
-    "catchmentKm2": 720,
-    "alertThreshold": 3.3,
-    "warningThreshold": 2.64,
-    "currentTma": 2.145,
-    "forecast6h": 2.19,
-    "forecast24h": 2.23,
-    "risk": "LOW",
-    "strategy": "HYBRID",
-    "upstreamStations": [],
-    "downstreamStations": [],
-    "ancestors": [],
-    "descendants": []
-  },
-  {
-    "id": "BS-029",
-    "name": "Serang Hulu",
-    "code": "BS-029",
-    "latitude": -7.252,
-    "longitude": 110.852,
-    "x": 331.2,
-    "y": 241.7,
-    "category": "NATURAL",
-    "river": "Kali Serang",
-    "basin": "Serang Basin",
-    "primary": false,
-    "elevationM": 96,
-    "catchmentKm2": 480,
-    "alertThreshold": 4,
-    "warningThreshold": 3.2,
-    "currentTma": 2.6,
-    "forecast6h": 2.65,
-    "forecast24h": 2.7,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [],
-    "downstreamStations": [],
-    "ancestors": [],
-    "descendants": []
-  },
-  {
-    "id": "BS-030",
-    "name": "Bengawan Jero",
-    "code": "BS-030",
-    "latitude": -7.052,
-    "longitude": 112.352,
-    "x": 870.2,
-    "y": 169.3,
-    "category": "NATURAL",
-    "river": "Bengawan Jero",
-    "basin": "Bengawan Jero Basin",
-    "primary": false,
-    "elevationM": 3,
-    "catchmentKm2": 380,
-    "alertThreshold": 2.9,
-    "warningThreshold": 2.32,
-    "currentTma": 1.885,
-    "forecast6h": 1.92,
-    "forecast24h": 1.96,
-    "risk": "LOW",
-    "strategy": "DIRECT_MULTI_HORIZON",
-    "upstreamStations": [],
-    "downstreamStations": [],
-    "ancestors": [],
-    "descendants": []
-  }
+/** Raw node seeds that strictly observe physical river DAG direction: id -> downstreamId */
+interface RawNodeSeed {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  downstreamId: string | null;
+  category: BasinCategory;
+  river: string;
+  subBasin: string;
+  elev: number;
+  area: number;
+  coldStart?: boolean;
+  baseSupply: number;
+  climatology: number;
+  withdrawal: number;
+  stressFactor: number;
+}
+
+const RAW_SEEDS: RawNodeSeed[] = [
+  // --- NORTHERN RIDGE BRANCH (Headwaters -> Downstream) ---
+  { id: "HUC-DEMO-0001", name: "Upper Pine Headwater", x: 230, y: 110, downstreamId: "HUC-DEMO-0005", category: "HEADWATER", river: "North Fork", subBasin: "Upper Ridge", elev: 620, area: 184, baseSupply: 142, climatology: 155, withdrawal: 18, stressFactor: 0.15 },
+  { id: "HUC-DEMO-0002", name: "Granite Peak Basin", x: 310, y: 90, downstreamId: "HUC-DEMO-0005", category: "HEADWATER", river: "North Fork", subBasin: "Upper Ridge", elev: 590, area: 165, baseSupply: 138, climatology: 150, withdrawal: 22, stressFactor: 0.18 },
+  { id: "HUC-DEMO-0003", name: "Highland Brook", x: 380, y: 110, downstreamId: "HUC-DEMO-0006", category: "HEADWATER", river: "North Fork", subBasin: "Upper Ridge", elev: 540, area: 195, baseSupply: 120, climatology: 148, withdrawal: 26, stressFactor: 0.22 },
+  { id: "HUC-DEMO-0004", name: "Alpine Meadow Basin", x: 440, y: 130, downstreamId: "HUC-DEMO-0006", category: "HEADWATER", river: "North Fork", subBasin: "Upper Ridge", elev: 510, area: 210, baseSupply: 115, climatology: 142, withdrawal: 30, stressFactor: 0.24 },
+  { id: "HUC-DEMO-0005", name: "North Ridge Confluence", x: 320, y: 160, downstreamId: "HUC-DEMO-0007", category: "TRIBUTARY", river: "North Fork", subBasin: "Upper Ridge", elev: 460, area: 380, baseSupply: 240, climatology: 290, withdrawal: 55, stressFactor: 0.28 },
+  { id: "HUC-DEMO-0006", name: "Cedar Creek Reach", x: 410, y: 170, downstreamId: "HUC-DEMO-0007", category: "TRIBUTARY", river: "North Fork", subBasin: "Upper Ridge", elev: 430, area: 360, baseSupply: 220, climatology: 275, withdrawal: 62, stressFactor: 0.32 },
+  { id: "HUC-DEMO-0007", name: "Upper Valley Junction", x: 390, y: 220, downstreamId: "HUC-DEMO-0008", category: "TRIBUTARY", river: "North Fork", subBasin: "Mid North", elev: 370, area: 590, baseSupply: 380, climatology: 490, withdrawal: 110, stressFactor: 0.45 },
+  { id: "HUC-DEMO-0008", name: "Stony River Sub-Basin", x: 460, y: 250, downstreamId: "HUC-DEMO-0021", category: "TRIBUTARY", river: "North Fork", subBasin: "Mid North", elev: 310, area: 720, baseSupply: 420, climatology: 560, withdrawal: 165, stressFactor: 0.58 },
+
+  // --- WESTERN HEADWATERS & MAINSTEM ORIGIN ---
+  { id: "HUC-DEMO-0009", name: "West Pass Summit Basin", x: 190, y: 220, downstreamId: "HUC-DEMO-0011", category: "HEADWATER", river: "Mainstem Upper", subBasin: "West Headwaters", elev: 680, area: 240, baseSupply: 160, climatology: 175, withdrawal: 15, stressFactor: 0.12 },
+  { id: "HUC-DEMO-0010", name: "Boulder Creek Catchment", x: 220, y: 290, downstreamId: "HUC-DEMO-0011", category: "HEADWATER", river: "Mainstem Upper", subBasin: "West Headwaters", elev: 610, area: 220, baseSupply: 145, climatology: 168, withdrawal: 20, stressFactor: 0.16 },
+  { id: "HUC-DEMO-0011", name: "Upper Mainstem Portal", x: 260, y: 260, downstreamId: "HUC-DEMO-0012", category: "TRIBUTARY", river: "Mainstem Upper", subBasin: "West Headwaters", elev: 490, area: 490, baseSupply: 285, climatology: 330, withdrawal: 48, stressFactor: 0.25 },
+  { id: "HUC-DEMO-0012", name: "Clearwater Gorge Reach", x: 330, y: 280, downstreamId: "HUC-DEMO-0013", category: "MAINSTEM", river: "Mainstem Upper", subBasin: "Upper Mainstem", elev: 390, area: 680, baseSupply: 370, climatology: 440, withdrawal: 85, stressFactor: 0.35 },
+  { id: "HUC-DEMO-0013", name: "Forest Gate Sub-Basin", x: 410, y: 295, downstreamId: "HUC-DEMO-0021", category: "MAINSTEM", river: "Mainstem Upper", subBasin: "Upper Mainstem", elev: 320, area: 840, baseSupply: 480, climatology: 580, withdrawal: 130, stressFactor: 0.42 },
+
+  // --- SOUTHERN VALLEY TRIBUTARIES ---
+  { id: "HUC-DEMO-0014", name: "South Ridge Springs", x: 270, y: 540, downstreamId: "HUC-DEMO-0017", category: "HEADWATER", river: "South Fork", subBasin: "South Highland", elev: 580, area: 190, baseSupply: 85, climatology: 135, withdrawal: 42, stressFactor: 0.68 },
+  { id: "HUC-DEMO-0015", name: "Iron Creek Headwaters", x: 340, y: 550, downstreamId: "HUC-DEMO-0017", category: "HEADWATER", river: "South Fork", subBasin: "South Highland", elev: 550, area: 175, baseSupply: 78, climatology: 130, withdrawal: 48, stressFactor: 0.74, coldStart: true },
+  { id: "HUC-DEMO-0016", name: "Bear Canyon Basin", x: 420, y: 530, downstreamId: "HUC-DEMO-0018", category: "HEADWATER", river: "South Fork", subBasin: "South Highland", elev: 520, area: 215, baseSupply: 95, climatology: 145, withdrawal: 55, stressFactor: 0.71 },
+  { id: "HUC-DEMO-0017", name: "South Fork Confluence", x: 330, y: 480, downstreamId: "HUC-DEMO-0019", category: "TRIBUTARY", river: "South Fork", subBasin: "South Highland", elev: 420, area: 410, baseSupply: 155, climatology: 260, withdrawal: 110, stressFactor: 0.78 },
+  { id: "HUC-DEMO-0018", name: "Dry Creek Intermediate Reach", x: 430, y: 470, downstreamId: "HUC-DEMO-0019", category: "TRIBUTARY", river: "South Fork", subBasin: "South Valley", elev: 380, area: 380, baseSupply: 140, climatology: 250, withdrawal: 105, stressFactor: 0.82, coldStart: true },
+  { id: "HUC-DEMO-0019", name: "Lower South Agricultural Reach", x: 420, y: 420, downstreamId: "HUC-DEMO-0020", category: "TRIBUTARY", river: "South Fork", subBasin: "South Valley", elev: 310, area: 850, baseSupply: 270, climatology: 480, withdrawal: 240, stressFactor: 0.86 },
+  { id: "HUC-DEMO-0020", name: "Willow Bend Sub-Basin", x: 510, y: 390, downstreamId: "HUC-DEMO-0022", category: "TRIBUTARY", river: "South Fork", subBasin: "South Valley", elev: 260, area: 990, baseSupply: 310, climatology: 560, withdrawal: 290, stressFactor: 0.88 },
+
+  // --- CENTRAL CONFLUENCE & AGRICULTURAL CORRIDOR ---
+  { id: "HUC-DEMO-0021", name: "Tri-River Central Confluence", x: 500, y: 320, downstreamId: "HUC-DEMO-0022", category: "MAINSTEM", river: "Mainstem Central", subBasin: "Central Valley", elev: 270, area: 1820, baseSupply: 980, climatology: 1320, withdrawal: 380, stressFactor: 0.52 },
+  { id: "HUC-DEMO-0022", name: "Verde Valley Agricultural Reach", x: 590, y: 340, downstreamId: "HUC-DEMO-0023", category: "MAINSTEM", river: "Mainstem Central", subBasin: "Central Valley", elev: 230, area: 2450, baseSupply: 1240, climatology: 1820, withdrawal: 680, stressFactor: 0.71 },
+  { id: "HUC-DEMO-0023", name: "Mid-Basin Barrage Reservoir", x: 670, y: 350, downstreamId: "HUC-DEMO-0030", category: "MAINSTEM", river: "Mainstem Central", subBasin: "Central Valley", elev: 190, area: 3100, baseSupply: 1450, climatology: 2150, withdrawal: 840, stressFactor: 0.76 },
+
+  // --- EASTERN HIGHLAND FORK (Tributary entering from East) ---
+  { id: "HUC-DEMO-0024", name: "Eastern Ridge Snowmelt Basin", x: 910, y: 130, downstreamId: "HUC-DEMO-0027", category: "HEADWATER", river: "East Fork", subBasin: "Eastern Highlands", elev: 640, area: 210, baseSupply: 130, climatology: 145, withdrawal: 16, stressFactor: 0.17 },
+  { id: "HUC-DEMO-0025", name: "Blue Ridge Headwater", x: 860, y: 150, downstreamId: "HUC-DEMO-0027", category: "HEADWATER", river: "East Fork", subBasin: "Eastern Highlands", elev: 590, area: 195, baseSupply: 125, climatology: 140, withdrawal: 20, stressFactor: 0.19 },
+  { id: "HUC-DEMO-0026", name: "Silver Spring Catchment", x: 790, y: 160, downstreamId: "HUC-DEMO-0028", category: "HEADWATER", river: "East Fork", subBasin: "Eastern Highlands", elev: 550, area: 185, baseSupply: 110, climatology: 135, withdrawal: 24, stressFactor: 0.23, coldStart: true },
+  { id: "HUC-DEMO-0027", name: "Upper East Fork Reach", x: 860, y: 220, downstreamId: "HUC-DEMO-0029", category: "TRIBUTARY", river: "East Fork", subBasin: "Eastern Highlands", elev: 440, area: 460, baseSupply: 245, climatology: 280, withdrawal: 50, stressFactor: 0.26 },
+  { id: "HUC-DEMO-0028", name: "Shadyside Tributary Reach", x: 790, y: 230, downstreamId: "HUC-DEMO-0029", category: "TRIBUTARY", river: "East Fork", subBasin: "Eastern Highlands", elev: 400, area: 420, baseSupply: 220, climatology: 265, withdrawal: 58, stressFactor: 0.30 },
+  { id: "HUC-DEMO-0029", name: "Eastern Foothills Confluence", x: 810, y: 300, downstreamId: "HUC-DEMO-0030", category: "TRIBUTARY", river: "East Fork", subBasin: "Eastern Transition", elev: 280, area: 950, baseSupply: 480, climatology: 580, withdrawal: 135, stressFactor: 0.38 },
+
+  // --- LOWER MAINSTEM & CONVERGENCE ---
+  { id: "HUC-DEMO-0030", name: "Grand Confluence Reach", x: 740, y: 370, downstreamId: "HUC-DEMO-0031", category: "MAINSTEM", river: "Lower Mainstem", subBasin: "Lower Basin", elev: 160, area: 4250, baseSupply: 1980, climatology: 2780, withdrawal: 960, stressFactor: 0.65 },
+  { id: "HUC-DEMO-0031", name: "Valley Crossing Industrial Reach", x: 810, y: 390, downstreamId: "HUC-DEMO-0032", category: "MAINSTEM", river: "Lower Mainstem", subBasin: "Lower Basin", elev: 120, area: 5400, baseSupply: 2240, climatology: 3200, withdrawal: 1180, stressFactor: 0.70 },
+  { id: "HUC-DEMO-0032", name: "Canyon Gate Reach", x: 880, y: 400, downstreamId: "HUC-DEMO-0035", category: "MAINSTEM", river: "Lower Mainstem", subBasin: "Lower Basin", elev: 85, area: 6800, baseSupply: 2480, climatology: 3600, withdrawal: 1340, stressFactor: 0.74 },
+
+  // --- SOUTHEAST SHORELINE TRIBUTARY ---
+  { id: "HUC-DEMO-0033", name: "South Lake Overflow", x: 620, y: 550, downstreamId: "HUC-DEMO-0034", category: "HEADWATER", river: "Coastal Canal", subBasin: "Southeast Coastal", elev: 310, area: 220, baseSupply: 90, climatology: 150, withdrawal: 55, stressFactor: 0.75, coldStart: true },
+  { id: "HUC-DEMO-0034", name: "Marshland Lateral Channel", x: 710, y: 500, downstreamId: "HUC-DEMO-0035", category: "TRIBUTARY", river: "Coastal Canal", subBasin: "Southeast Coastal", elev: 180, area: 460, baseSupply: 160, climatology: 270, withdrawal: 110, stressFactor: 0.79 },
+
+  // --- DELTA & ESTUARY (Terminal Reaches) ---
+  { id: "HUC-DEMO-0035", name: "Delta Head Confluence", x: 940, y: 410, downstreamId: "HUC-DEMO-0036", category: "MAINSTEM", river: "Delta Reach", subBasin: "Delta Estuary", elev: 52, area: 7800, baseSupply: 2650, climatology: 3950, withdrawal: 1480, stressFactor: 0.72 },
+  { id: "HUC-DEMO-0036", name: "Upper Delta Canal Zone", x: 980, y: 390, downstreamId: "HUC-DEMO-0037", category: "MAINSTEM", river: "Delta Reach", subBasin: "Delta Estuary", elev: 34, area: 8900, baseSupply: 2800, climatology: 4200, withdrawal: 1600, stressFactor: 0.69 },
+  { id: "HUC-DEMO-0037", name: "North Delta Distributary", x: 1040, y: 370, downstreamId: "HUC-DEMO-0041", category: "MAINSTEM", river: "Delta Reach", subBasin: "Delta Estuary", elev: 18, area: 4800, baseSupply: 1520, climatology: 2280, withdrawal: 840, stressFactor: 0.64 },
+  { id: "HUC-DEMO-0038", name: "South Delta Distributary", x: 1010, y: 450, downstreamId: "HUC-DEMO-0039", category: "TRIBUTARY", river: "Delta Reach", subBasin: "Delta Estuary", elev: 22, area: 4500, baseSupply: 1410, climatology: 2150, withdrawal: 810, stressFactor: 0.67, coldStart: true },
+  { id: "HUC-DEMO-0039", name: "Estuary Salt-Wedge Reach", x: 1060, y: 480, downstreamId: "HUC-DEMO-0042", category: "TRIBUTARY", river: "Coastal Outfall", subBasin: "Delta Estuary", elev: 10, area: 4700, baseSupply: 1460, climatology: 2200, withdrawal: 850, stressFactor: 0.70, coldStart: true },
+  { id: "HUC-DEMO-0040", name: "Bay Harbor Canal", x: 1020, y: 530, downstreamId: "HUC-DEMO-0042", category: "HEADWATER", river: "Coastal Outfall", subBasin: "Coastal Fringe", elev: 45, area: 180, baseSupply: 75, climatology: 125, withdrawal: 45, stressFactor: 0.66, coldStart: true },
+  { id: "HUC-DEMO-0041", name: "Northern Bay Terminal Outlet", x: 1110, y: 360, downstreamId: null, category: "OUTLET", river: "Ocean Terminal", subBasin: "Marine Outfall", elev: 2, area: 12500, baseSupply: 1720, climatology: 2540, withdrawal: 890, stressFactor: 0.61 },
+  { id: "HUC-DEMO-0042", name: "Southern Bay Terminal Outlet", x: 1120, y: 480, downstreamId: null, category: "OUTLET", river: "Ocean Terminal", subBasin: "Marine Outfall", elev: 1, area: 12300, baseSupply: 1680, climatology: 2480, withdrawal: 920, stressFactor: 0.68 },
 ];
 
-export const STATIC_STATION_MAP: Record<string, StaticStation> = Object.fromEntries(
+/** Graph propagation: derive ancestors, descendants, depth, and reachability */
+const downstreamMap: Record<string, string | null> = {};
+const upstreamMap: Record<string, string[]> = {};
+
+RAW_SEEDS.forEach((s) => {
+  downstreamMap[s.id] = s.downstreamId;
+  upstreamMap[s.id] = [];
+});
+
+RAW_SEEDS.forEach((s) => {
+  if (s.downstreamId && upstreamMap[s.downstreamId]) {
+    upstreamMap[s.downstreamId].push(s.id);
+  }
+});
+
+// Calculate graph depth (distance from headwater)
+function computeDepth(id: string): number {
+  const ups = upstreamMap[id] || [];
+  if (ups.length === 0) return 0;
+  return 1 + Math.max(...ups.map(computeDepth));
+}
+
+// Calculate distance to terminal outlet
+function computeOutletDistance(id: string): number {
+  const down = downstreamMap[id];
+  if (!down) return 0;
+  return 24 + computeOutletDistance(down);
+}
+
+// Compute all transitive ancestors (upstream nodes)
+export function getAncestors(id: string): string[] {
+  const visited = new Set<string>();
+  function dfs(curr: string) {
+    const ups = upstreamMap[curr] || [];
+    for (const u of ups) {
+      if (!visited.has(u)) {
+        visited.add(u);
+        dfs(u);
+      }
+    }
+  }
+  dfs(id);
+  return Array.from(visited);
+}
+
+// Compute all transitive descendants (downstream path to outlet)
+export function getDescendants(id: string): string[] {
+  const result: string[] = [];
+  let curr = downstreamMap[id];
+  while (curr) {
+    if (result.includes(curr)) break; // cycle protection
+    result.push(curr);
+    curr = downstreamMap[curr] ?? null;
+  }
+  return result;
+}
+
+// Get 1-hop upstream nodes
+export function getUpstream1Hop(id: string): string[] {
+  return upstreamMap[id] || [];
+}
+
+// Get 2-hop upstream nodes
+export function getUpstream2Hop(id: string): string[] {
+  const hop1 = getUpstream1Hop(id);
+  const hop2 = new Set<string>();
+  hop1.forEach((h1) => {
+    (upstreamMap[h1] || []).forEach((h2) => hop2.add(h2));
+  });
+  return Array.from(hop2);
+}
+
+// Get 3-hop upstream nodes
+export function getUpstream3Hop(id: string): string[] {
+  const hop2 = getUpstream2Hop(id);
+  const hop3 = new Set<string>();
+  hop2.forEach((h2) => {
+    (upstreamMap[h2] || []).forEach((h3) => hop3.add(h3));
+  });
+  return Array.from(hop3);
+}
+
+// Get full downstream path
+export function getDownstreamPath(id: string): string[] {
+  return getDescendants(id);
+}
+
+/** Construct full static station / basin objects */
+export const STATIC_STATIONS: StaticBasinNode[] = RAW_SEEDS.map((s, idx) => {
+  const depth = computeDepth(s.id);
+  const outletDist = computeOutletDistance(s.id);
+  const isHeadwater = (upstreamMap[s.id] || []).length === 0;
+  const isColdStart = Boolean(s.coldStart);
+
+  // Hydrological base values
+  const streamflow = Number((s.baseSupply * 0.88).toFixed(1));
+  const baseflow = Number((streamflow * 0.62).toFixed(1));
+  const quickflow = Number((streamflow * 0.38).toFixed(1));
+  const totalWithdrawal = s.withdrawal;
+  const irrigationWithdrawal = Number((totalWithdrawal * 0.65).toFixed(1));
+  const publicSupplyWithdrawal = Number((totalWithdrawal * 0.22).toFixed(1));
+  const thermoelectricWithdrawal = Number((totalWithdrawal * 0.13).toFixed(1));
+
+  // Availability proxy = Supply - Withdrawal
+  const availabilityProxy = Number((streamflow - totalWithdrawal).toFixed(1));
+
+  // Water-limitation proxy = 1 - (Availability / Climatology)
+  const waterLimitationProxy = Number(
+    Math.max(0, Math.min(1, 1 - availabilityProxy / Math.max(1, s.climatology))).toFixed(3)
+  );
+
+  // Model-predicted probability P(water stress at month t+1) in [0, 1]
+  const rawRisk = s.stressFactor;
+  const riskScore = Number(rawRisk.toFixed(2));
+
+  let riskTier: RiskLevel = "LOW";
+  if (riskScore >= 0.75) riskTier = "CRITICAL";
+  else if (riskScore >= 0.50) riskTier = "HIGH";
+  else if (riskScore >= 0.25) riskTier = "MODERATE";
+
+  // Confidence is lower for cold-start spatial basins
+  const confidence = isColdStart ? 0.72 : 0.88;
+
+  const strategy: ForecastStrategy = isHeadwater
+    ? "TABULAR_BASELINE"
+    : depth > 3
+    ? "DIRECTED_GNN"
+    : "GRAPH_CATBOOST";
+
+  // Coordinates approximate geographic basin in Java
+  const lat = -7.45 + (s.y - 350) * 0.0028;
+  const lon = 111.45 + (s.x - 600) * 0.0035;
+
+  const ups = upstreamMap[s.id] || [];
+  const down = s.downstreamId ? [s.downstreamId] : [];
+
+  return {
+    id: s.id,
+    name: s.name,
+    code: s.id,
+    x: s.x,
+    y: s.y,
+    latitude: Number(lat.toFixed(4)),
+    longitude: Number(lon.toFixed(4)),
+    category: s.category,
+    river: s.river,
+    basin: "Directed River Basin System",
+    subBasin: s.subBasin,
+    primary: true,
+    elevationM: s.elev,
+    catchmentKm2: s.area,
+    graphDepth: depth,
+    headwater: isHeadwater,
+    outletDistanceKm: outletDist,
+    coldStart: isColdStart,
+    downstreamId: s.downstreamId,
+    upstreamIds: ups,
+    ancestors: getAncestors(s.id),
+    descendants: getDescendants(s.id),
+    climatology: s.climatology,
+    currentSupply: streamflow,
+    streamflow,
+    baseflow,
+    quickflow,
+    irrigationWithdrawal,
+    publicSupplyWithdrawal,
+    thermoelectricWithdrawal,
+    totalWithdrawal,
+    availabilityProxy,
+    waterLimitationProxy,
+    riskScore,
+    risk: riskTier,
+    confidence,
+    strategy,
+    // Aliases
+    alertThreshold: 0.75,
+    warningThreshold: 0.50,
+    currentTma: streamflow,
+    forecast6h: riskScore,
+    forecast24h: riskScore,
+    upstreamStations: ups,
+    downstreamStations: down,
+    basinAreaKm2: s.area,
+    population: Math.round(s.area * (s.category === "MAINSTEM" ? 180 : s.category === "OUTLET" ? 220 : 45)),
+    supplyRatio: Number((streamflow / Math.max(1, s.climatology)).toFixed(3)),
+    climatologyAnomalySigma: Number(((streamflow - s.climatology) / (s.climatology * 0.28)).toFixed(2)),
+    downstreamStationId: s.downstreamId,
+  };
+});
+
+export const STATIC_STATION_MAP: Record<string, StaticBasinNode> = Object.fromEntries(
   STATIC_STATIONS.map((s) => [s.id, s])
 );
 
-export const STATIC_EDGES: StaticEdge[] = [
-  {
-    "id": "EDGE-BS-022-BS-001",
-    "source": "BS-022",
-    "target": "BS-001",
-    "sourceName": "Tirtomoyo",
-    "targetName": "Wonogiri Dam",
-    "river": "Kali Tirtomoyo",
-    "distanceKm": 18.5,
-    "travelTimeHours": 4.2,
-    "residualCorrelation": 0.74,
-    "path": "M403.079,487.901L380.799,469.399L359.598,451.987",
-    "x1": 403.1,
-    "y1": 487.9,
-    "x2": 359.6,
-    "y2": 452
-  },
-  {
-    "id": "EDGE-BS-021-BS-001",
-    "source": "BS-021",
-    "target": "BS-001",
-    "sourceName": "Keduang",
-    "targetName": "Wonogiri Dam",
-    "river": "Kali Keduang",
-    "distanceKm": 14.2,
-    "travelTimeHours": 3.1,
-    "residualCorrelation": 0.82,
-    "path": "M385.83,441.106L366.426,447.634L359.598,451.987",
-    "x1": 385.8,
-    "y1": 441.1,
-    "x2": 359.6,
-    "y2": 452
-  },
-  {
-    "id": "EDGE-BS-001-BS-002",
-    "source": "BS-001",
-    "target": "BS-002",
-    "sourceName": "Wonogiri Dam",
-    "targetName": "Nguter",
-    "river": "Bengawan Solo Hulu",
-    "distanceKm": 16.8,
-    "travelTimeHours": 3.8,
-    "residualCorrelation": 0.88,
-    "path": "M359.598,451.987L355.645,444.007L350.255,433.126L344.865,422.246L340.912,412.092",
-    "x1": 359.6,
-    "y1": 452,
-    "x2": 340.9,
-    "y2": 412.1
-  },
-  {
-    "id": "EDGE-BS-002-BS-003",
-    "source": "BS-002",
-    "target": "BS-003",
-    "sourceName": "Nguter",
-    "targetName": "Colo Weir",
-    "river": "Bengawan Solo Hulu",
-    "distanceKm": 5.4,
-    "travelTimeHours": 1.2,
-    "residualCorrelation": 0.94,
-    "path": "M340.912,412.092L335.881,407.741L330.85,403.752",
-    "x1": 340.9,
-    "y1": 412.1,
-    "x2": 330.9,
-    "y2": 403.8
-  },
-  {
-    "id": "EDGE-BS-003-BS-004",
-    "source": "BS-003",
-    "target": "BS-004",
-    "sourceName": "Colo Weir",
-    "targetName": "Jurug",
-    "river": "Bengawan Solo Hulu",
-    "distanceKm": 22.1,
-    "travelTimeHours": 4.9,
-    "residualCorrelation": 0.86,
-    "path": "M330.85,403.752L328.694,389.61L330.491,375.108L332.288,364.232L333.366,355.532",
-    "x1": 330.9,
-    "y1": 403.8,
-    "x2": 333.4,
-    "y2": 355.5
-  },
-  {
-    "id": "EDGE-BS-005-BS-004",
-    "source": "BS-005",
-    "target": "BS-004",
-    "sourceName": "Dengkeng",
-    "targetName": "Jurug",
-    "river": "Kali Dengkeng",
-    "distanceKm": 24.6,
-    "travelTimeHours": 5.2,
-    "residualCorrelation": 0.76,
-    "path": "M284.495,397.225L305.337,382.359L319.711,367.857L333.366,355.532",
-    "x1": 284.5,
-    "y1": 397.2,
-    "x2": 333.4,
-    "y2": 355.5
-  },
-  {
-    "id": "EDGE-BS-020-BS-004",
-    "source": "BS-020",
-    "target": "BS-004",
-    "sourceName": "Samin",
-    "targetName": "Jurug",
-    "river": "Kali Samin",
-    "distanceKm": 15.3,
-    "travelTimeHours": 3.4,
-    "residualCorrelation": 0.81,
-    "path": "M366.785,375.47L344.865,364.232L333.366,355.532",
-    "x1": 366.8,
-    "y1": 375.5,
-    "x2": 333.4,
-    "y2": 355.5
-  },
-  {
-    "id": "EDGE-BS-004-BS-007",
-    "source": "BS-004",
-    "target": "BS-007",
-    "sourceName": "Jurug",
-    "targetName": "Sragen",
-    "river": "Bengawan Solo",
-    "distanceKm": 28.7,
-    "travelTimeHours": 6.1,
-    "residualCorrelation": 0.89,
-    "path": "M333.366,355.532L341.271,342.482L355.645,329.796L373.612,317.111L391.939,305.514",
-    "x1": 333.4,
-    "y1": 355.5,
-    "x2": 391.9,
-    "y2": 305.5
-  },
-  {
-    "id": "EDGE-BS-006-BS-007",
-    "source": "BS-006",
-    "target": "BS-007",
-    "sourceName": "Pepe Hilir",
-    "targetName": "Sragen",
-    "river": "Kali Pepe",
-    "distanceKm": 26.3,
-    "travelTimeHours": 5.8,
-    "residualCorrelation": 0.78,
-    "path": "M323.664,350.457L391.939,305.514",
-    "x1": 323.7,
-    "y1": 350.5,
-    "x2": 391.9,
-    "y2": 305.5
-  },
-  {
-    "id": "EDGE-BS-007-BS-025",
-    "source": "BS-007",
-    "target": "BS-025",
-    "sourceName": "Sragen",
-    "targetName": "Widodaren",
-    "river": "Bengawan Solo",
-    "distanceKm": 27.4,
-    "travelTimeHours": 5.6,
-    "residualCorrelation": 0.87,
-    "path": "M391.939,305.514L413.14,297.18L434.701,291.744L456.262,289.932L474.948,288.845",
-    "x1": 391.9,
-    "y1": 305.5,
-    "x2": 474.9,
-    "y2": 288.8
-  },
-  {
-    "id": "EDGE-BS-025-BS-011",
-    "source": "BS-025",
-    "target": "BS-011",
-    "sourceName": "Widodaren",
-    "targetName": "Ngawi Confluence",
-    "river": "Bengawan Solo",
-    "distanceKm": 24.8,
-    "travelTimeHours": 5.1,
-    "residualCorrelation": 0.85,
-    "path": "M474.948,288.845L495.79,289.932L517.351,293.556L531.724,295.368L545.02,296.093",
-    "x1": 474.9,
-    "y1": 288.8,
-    "x2": 545,
-    "y2": 296.1
-  },
-  {
-    "id": "EDGE-BS-008-BS-009",
-    "source": "BS-008",
-    "target": "BS-009",
-    "sourceName": "Badegan",
-    "targetName": "Ponorogo",
-    "river": "Kali Madiun Hulu",
-    "distanceKm": 12.4,
-    "travelTimeHours": 2.8,
-    "residualCorrelation": 0.86,
-    "path": "M522.022,465.409L531.724,465.771L542.505,466.497L552.566,464.683",
-    "x1": 522,
-    "y1": 465.4,
-    "x2": 552.6,
-    "y2": 464.7
-  },
-  {
-    "id": "EDGE-BS-009-BS-010",
-    "source": "BS-009",
-    "target": "BS-010",
-    "sourceName": "Ponorogo",
-    "targetName": "Madiun",
-    "river": "Kali Madiun",
-    "distanceKm": 31.2,
-    "travelTimeHours": 6.8,
-    "residualCorrelation": 0.84,
-    "path": "M552.566,464.683L556.879,447.634L562.269,425.873L567.659,404.114L572.33,378.008",
-    "x1": 552.6,
-    "y1": 464.7,
-    "x2": 572.3,
-    "y2": 378
-  },
-  {
-    "id": "EDGE-BS-013-BS-012",
-    "source": "BS-013",
-    "target": "BS-012",
-    "sourceName": "Gandong Weir",
-    "targetName": "Kwadungan",
-    "river": "Kali Gandong",
-    "distanceKm": 16.5,
-    "travelTimeHours": 3.6,
-    "residualCorrelation": 0.79,
-    "path": "M527.412,368.582L542.505,353.357L557.597,339.22",
-    "x1": 527.4,
-    "y1": 368.6,
-    "x2": 557.6,
-    "y2": 339.2
-  },
-  {
-    "id": "EDGE-BS-010-BS-012",
-    "source": "BS-010",
-    "target": "BS-012",
-    "sourceName": "Madiun",
-    "targetName": "Kwadungan",
-    "river": "Kali Madiun",
-    "distanceKm": 18.2,
-    "travelTimeHours": 4,
-    "residualCorrelation": 0.91,
-    "path": "M572.33,378.008L567.659,358.794L557.597,339.22",
-    "x1": 572.3,
-    "y1": 378,
-    "x2": 557.6,
-    "y2": 339.2
-  },
-  {
-    "id": "EDGE-BS-012-BS-011",
-    "source": "BS-012",
-    "target": "BS-011",
-    "sourceName": "Kwadungan",
-    "targetName": "Ngawi Confluence",
-    "river": "Kali Madiun",
-    "distanceKm": 22.7,
-    "travelTimeHours": 4.8,
-    "residualCorrelation": 0.88,
-    "path": "M557.597,339.22L551.488,317.111L545.02,296.093",
-    "x1": 557.6,
-    "y1": 339.2,
-    "x2": 545,
-    "y2": 296.1
-  },
-  {
-    "id": "EDGE-BS-011-BS-014",
-    "source": "BS-011",
-    "target": "BS-014",
-    "sourceName": "Ngawi Confluence",
-    "targetName": "Cepu",
-    "river": "Bengawan Solo",
-    "distanceKm": 38.5,
-    "travelTimeHours": 8.2,
-    "residualCorrelation": 0.83,
-    "path": "M545.02,296.093L553.285,280.874L564.065,262.758L574.846,244.645L585.626,226.534L597.125,205.527",
-    "x1": 545,
-    "y1": 296.1,
-    "x2": 597.1,
-    "y2": 205.5
-  },
-  {
-    "id": "EDGE-BS-014-BS-024",
-    "source": "BS-014",
-    "target": "BS-024",
-    "sourceName": "Cepu",
-    "targetName": "Padangan",
-    "river": "Bengawan Solo",
-    "distanceKm": 17.6,
-    "travelTimeHours": 3.9,
-    "residualCorrelation": 0.92,
-    "path": "M597.125,205.527L614.374,212.046L636.653,223.274",
-    "x1": 597.1,
-    "y1": 205.5,
-    "x2": 636.7,
-    "y2": 223.3
-  },
-  {
-    "id": "EDGE-BS-024-BS-015",
-    "source": "BS-024",
-    "target": "BS-015",
-    "sourceName": "Padangan",
-    "targetName": "Bojonegoro Barrage",
-    "river": "Bengawan Solo",
-    "distanceKm": 26.8,
-    "travelTimeHours": 5.7,
-    "residualCorrelation": 0.89,
-    "path": "M636.653,223.274L653.902,217.479L675.463,210.235L701.335,205.165",
-    "x1": 636.7,
-    "y1": 223.3,
-    "x2": 701.3,
-    "y2": 205.2
-  },
-  {
-    "id": "EDGE-BS-023-BS-015",
-    "source": "BS-023",
-    "target": "BS-015",
-    "sourceName": "Kening",
-    "targetName": "Bojonegoro Barrage",
-    "river": "Kali Kening",
-    "distanceKm": 28.1,
-    "travelTimeHours": 6.2,
-    "residualCorrelation": 0.77,
-    "path": "M690.555,133.11L695.226,157.728L698.82,181.264L701.335,205.165",
-    "x1": 690.6,
-    "y1": 133.1,
-    "x2": 701.3,
-    "y2": 205.2
-  },
-  {
-    "id": "EDGE-BS-015-BS-016",
-    "source": "BS-015",
-    "target": "BS-016",
-    "sourceName": "Bojonegoro Barrage",
-    "targetName": "Babat Barrage",
-    "river": "Bengawan Solo",
-    "distanceKm": 34.2,
-    "travelTimeHours": 7.4,
-    "residualCorrelation": 0.86,
-    "path": "M701.335,205.165L725.771,201.181L750.925,199.37L776.079,195.749L801.952,191.041",
-    "x1": 701.3,
-    "y1": 205.2,
-    "x2": 802,
-    "y2": 191
-  },
-  {
-    "id": "EDGE-BS-016-BS-017",
-    "source": "BS-016",
-    "target": "BS-017",
-    "sourceName": "Babat Barrage",
-    "targetName": "Karanggeneng",
-    "river": "Bengawan Solo Hilir",
-    "distanceKm": 21.3,
-    "travelTimeHours": 4.8,
-    "residualCorrelation": 0.9,
-    "path": "M801.952,191.041L819.201,179.453L833.574,168.59L852.26,158.09",
-    "x1": 802,
-    "y1": 191,
-    "x2": 852.3,
-    "y2": 158.1
-  },
-  {
-    "id": "EDGE-BS-017-BS-018",
-    "source": "BS-017",
-    "target": "BS-018",
-    "sourceName": "Karanggeneng",
-    "targetName": "Sembayat Barrage",
-    "river": "Bengawan Solo Hilir",
-    "distanceKm": 27.5,
-    "travelTimeHours": 6,
-    "residualCorrelation": 0.87,
-    "path": "M852.26,158.09L873.102,152.297L898.257,148.677L929.879,143.97",
-    "x1": 852.3,
-    "y1": 158.1,
-    "x2": 929.9,
-    "y2": 144
-  },
-  {
-    "id": "EDGE-BS-018-BS-019",
-    "source": "BS-018",
-    "target": "BS-019",
-    "sourceName": "Sembayat Barrage",
-    "targetName": "Ujung Pangkah Estuary",
-    "river": "Bengawan Solo Hilir",
-    "distanceKm": 15.6,
-    "travelTimeHours": 3.5,
-    "residualCorrelation": 0.93,
-    "path": "M929.879,143.97L935.988,132.386L939.581,119.716L942.097,108.495",
-    "x1": 929.9,
-    "y1": 144,
-    "x2": 942.1,
-    "y2": 108.5
-  }
-];
+/** Build directed edges connecting each node to its downstream receiving node */
+export const STATIC_EDGES: StaticEdge[] = RAW_SEEDS.filter((s) => s.downstreamId !== null).map((s) => {
+  const target = STATIC_STATION_MAP[s.downstreamId!];
+  const source = STATIC_STATION_MAP[s.id];
+  const dx = target.x - source.x;
+  const dy = target.y - source.y;
+  const dist = Math.sqrt(dx * dx + dy * dy) * 0.45; // km
+  const travelTime = Number((dist / 3.8).toFixed(1)); // hours
+
+  // Smooth quadratic or cubic bezier curve path between source and target
+  const midX = (source.x + target.x) / 2 + (dy > 0 ? 12 : -12);
+  const midY = (source.y + target.y) / 2 + (dx > 0 ? -8 : 8);
+  const path = `M${source.x},${source.y} Q${midX},${midY} ${target.x},${target.y}`;
+
+  return {
+    id: `EDGE-${source.id}-${target.id}`,
+    source: source.id,
+    target: target.id,
+    sourceName: source.name,
+    targetName: target.name,
+    river: source.river,
+    distanceKm: Number(dist.toFixed(1)),
+    travelTimeHours: travelTime,
+    residualCorrelation: Number((0.72 + (0.24 * (source.elevationM - target.elevationM)) / 500).toFixed(2)),
+    path,
+    x1: source.x,
+    y1: source.y,
+    x2: target.x,
+    y2: target.y,
+  };
+});
+
+export function getStationById(id: string): StaticBasinNode | undefined {
+  return STATIC_STATION_MAP[id];
+}
+

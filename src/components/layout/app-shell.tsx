@@ -1,24 +1,24 @@
 "use client";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  Bell, ChevronsLeft, ChevronsRight, Clock, Lock, LogOut, Menu, Play, RotateCcw,
-  Search, ShieldCheck, Square, X, Anchor, Eye, CheckCheck, Sparkles, MessageSquareCode,
-  ChevronDown, Check, Sun, Moon, Monitor
+  Bell, ChevronsLeft, ChevronsRight, Lock, LogOut, Menu,
+  Search, ShieldCheck, X, Droplets, Eye, Sparkles,
+  ChevronDown, Check, Sun, Moon, Monitor, Network
 } from "lucide-react";
-import { NAV_GROUPS, ALL_NAV_ITEMS, accessFor } from "@/config/navigation";
+import { NAV_GROUPS, accessFor } from "@/config/navigation";
 import { DEMO_INTERVAL_MS, PRODUCT, ROLE_LABELS, SIM_BASE_NOW, SIM_TICK_MS } from "@/config/constants";
 import { useUiStore } from "@/store/ui-store";
 import { useNotificationStore } from "@/store/notification-store";
-import { useOverview, useResetScenario, useSearch } from "@/hooks/use-api";
+import { useOverview, useSearch } from "@/hooks/use-api";
 import { eventBus } from "@/lib/event-bus";
 import { fmtTime, fmtRelative, fmtDate } from "@/lib/format";
 import { cn, debounce } from "@/lib/utils";
-import { Tooltip, Toggle, Chip } from "@/components/ui/primitives";
+import { Tooltip } from "@/components/ui/primitives";
 import { AssistantDrawer } from "@/components/assistant/assistant-drawer";
-import { useLiveJakartaTime } from "@/hooks/use-live-time";
+import { useLiveJakartaTime, useIsMounted } from "@/hooks/use-live-time";
 import type { OverviewData } from "@/types/domain";
 
 /* ------------------------------------------------------------------ */
@@ -52,20 +52,33 @@ function DemoRuntime() {
     const before = prev.current;
     prev.current = data;
     if (!before) return;
-    // Emit domain events derived from state deltas.
+
     const seenBefore = new Set(before.recentEvents.map((e) => e.id));
     for (const ev of data.recentEvents) {
       if (seenBefore.has(ev.id)) continue;
       eventBus.emit(ev);
-      if (ev.type === "ALERT_CREATED" || ev.type === "STATION_STATUS_CHANGED") {
-        push({ id: `n-${ev.id}`, title: ev.message, body: ev.stationId ? `Station ${ev.stationId} · ${fmtTime(ev.timestamp)} WIB` : undefined, severity: ev.severity === "critical" ? "critical" : "warning", href: ev.type === "ALERT_CREATED" ? "/alerts" : `/stations?station=${ev.stationId}` });
+      if (ev.type === "ALERT_CREATED" || ev.type === "BASIN_STATUS_CHANGED" || ev.type === "STATION_STATUS_CHANGED") {
+        push({
+          id: `n-${ev.id}`,
+          title: ev.message,
+          body: ev.stationId ? `Sub-Basin ${ev.stationId} · ${fmtTime(ev.timestamp)}` : undefined,
+          severity: ev.severity === "critical" ? "critical" : "warning",
+          href: ev.type === "ALERT_CREATED" ? "/alerts" : `/network?basin=${ev.stationId}`,
+        });
       }
     }
+
     const riskBefore = new Map(before.stations.map((s) => [s.station.id, s.risk]));
     for (const s of data.stations) {
       const r0 = riskBefore.get(s.station.id);
       if (r0 && r0 !== s.risk && (s.risk === "HIGH" || s.risk === "CRITICAL")) {
-        push({ id: `n-risk-${s.station.id}-${s.risk}`, title: `${s.station.name} risk elevated to ${s.risk}`, body: `${s.currentTma.toFixed(2)} m · ${Math.round(s.thresholdRatio * 100)}% of alert threshold`, severity: s.risk === "CRITICAL" ? "critical" : "warning", href: `/stations?station=${s.station.id}` });
+        push({
+          id: `n-risk-${s.station.id}-${s.risk}`,
+          title: `${s.station.name} risk elevated to ${s.risk}`,
+          body: `Next-month water-stress probability P = ${s.riskScore.toFixed(2)} (${s.risk} tier)`,
+          severity: s.risk === "CRITICAL" ? "critical" : "warning",
+          href: `/network?basin=${s.station.id}`,
+        });
       }
     }
   }, [data, push]);
@@ -74,7 +87,7 @@ function DemoRuntime() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Sidebar — Restrained, Quiet, Human-Designed Navigation             */
+/* Sidebar — Restrained, Scientific, Topological Navigation            */
 /* ------------------------------------------------------------------ */
 
 function Sidebar() {
@@ -91,16 +104,21 @@ function Sidebar() {
     <nav aria-label="Primary" className="flex h-full flex-col">
       {/* Brand area */}
       <div className={cn("flex h-12 items-center border-b border-border px-3 shrink-0", collapsed ? "justify-center" : "justify-between")}>
-        <div className="flex items-center gap-2">
-          <span className="flex h-5 w-5 items-center justify-center rounded bg-surface-2 text-fg border border-border">
-            <Anchor className="h-3 w-3 text-water" />
+        <Link href="/overview" className="flex items-center gap-2">
+          <span className="flex h-6 w-6 items-center justify-center rounded bg-water-dim text-fg border border-water/40">
+            <Droplets className="h-3.5 w-3.5 text-water" />
           </span>
           {!collapsed && (
-            <span className="text-xs font-semibold tracking-wider uppercase text-fg">
-              {PRODUCT.name}
-            </span>
+            <div className="flex flex-col">
+              <span className="text-xs font-bold tracking-widest uppercase text-fg font-mono">
+                {PRODUCT.name}
+              </span>
+              <span className="text-[9px] text-fg-subtle tracking-tight truncate max-w-[130px]">
+                Directed Water-Stress
+              </span>
+            </div>
           )}
-        </div>
+        </Link>
         <button className="btn btn-ghost btn-sm lg:hidden" onClick={() => setMobile(false)} aria-label="Close navigation">
           <X className="h-4 w-4" />
         </button>
@@ -148,14 +166,13 @@ function Sidebar() {
 
       {/* Footer controls */}
       <div className="border-t border-border p-2 shrink-0 space-y-1.5">
-        {/* User profile card */}
         <div className={cn("flex items-center gap-2 rounded px-2 py-1.5 bg-surface-1 border border-border-subtle", collapsed && "justify-center px-0")}>
           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-surface-2 text-[10px] font-mono font-medium text-water">
-            {user?.initials ?? "?"}
+            {user?.initials ?? "TO"}
           </span>
           {!collapsed && (
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[11px] font-medium text-fg leading-tight">{user?.name}</div>
+              <div className="truncate text-[11px] font-medium text-fg leading-tight">{user?.name ?? "TIRTA Operator"}</div>
               <div className="truncate text-[10px] font-mono text-fg-subtle leading-tight">{user?.role ? ROLE_LABELS[user.role] : "Guest"}</div>
             </div>
           )}
@@ -198,10 +215,10 @@ function Sidebar() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Topbar — Contextual, Restrained, Quiet                              */
+/* Topbar                                                              */
 /* ------------------------------------------------------------------ */
 
-function LiveJakartaClock({ data }: { data?: OverviewData }) {
+function LiveSimulationClock({ data }: { data?: OverviewData }) {
   const tick = useUiStore((s) => s.tick);
   const liveTime = useLiveJakartaTime(1000);
 
@@ -212,7 +229,7 @@ function LiveJakartaClock({ data }: { data?: OverviewData }) {
     return (
       <span className="mono text-fg-subtle text-[11px] inline-flex items-center gap-1.5" suppressHydrationWarning>
         <span className="h-1.5 w-1.5 rounded-full bg-ok opacity-60" />
-        <span>— WIB</span>
+        <span>Origin 168</span>
       </span>
     );
   }
@@ -221,11 +238,11 @@ function LiveJakartaClock({ data }: { data?: OverviewData }) {
     return (
       <span
         className="mono text-[11px] inline-flex items-center gap-1.5 text-warn bg-warn/10 px-1.5 py-0.5 rounded border border-warn/30 cursor-help"
-        title={`Simulation Mode Active: advanced +${tick * 5}m (${fmtDate(simTimestamp)})`}
+        title={`Simulation origin step: +${tick} month(s) (${fmtDate(simTimestamp)})`}
       >
         <span className="h-1.5 w-1.5 rounded-full bg-warn animate-ping" />
-        <span className="font-semibold">{fmtTime(simTimestamp)}</span>
-        <span className="text-warn/80 text-[10px]">WIB (+{tick * 5}m)</span>
+        <span className="font-semibold">{data?.currentOrigin ?? `Origin ${168 + tick}`}</span>
+        <span className="text-warn/80 text-[10px]">(+{tick}m)</span>
       </span>
     );
   }
@@ -233,30 +250,36 @@ function LiveJakartaClock({ data }: { data?: OverviewData }) {
   return (
     <span
       className="mono text-[11px] inline-flex items-center gap-1.5 text-fg-muted hover:text-fg transition-colors cursor-help"
-      title={`${liveTime.dayName}, ${liveTime.dateFormatted} (Asia/Jakarta, UTC+7)`}
+      title="TIRTA Operational Origin: Origin 168 (Block 14 · Sep-Aug annual cycle)"
     >
       <span className="h-1.5 w-1.5 rounded-full bg-ok animate-pulse" />
-      <span className="font-medium text-fg">{liveTime.timeWithSeconds}</span>
-      <span className="text-fg-subtle text-[10px]">WIB</span>
+      <span className="font-medium text-fg">Origin 168</span>
+      <span className="text-fg-subtle text-[10px]">· Next Month Outlook</span>
     </span>
   );
 }
 
 const ROUTE_TITLES: Record<string, string> = {
   "/overview": "Overview",
-  "/monitoring": "Monitoring",
-  "/forecasts": "Forecasts",
-  "/network": "Network",
-  "/stations": "Stations",
-  "/alerts": "Alerts",
-  "/data-quality": "Data Quality",
-  "/models": "Models",
-  "/inference": "Inference",
-  "/experiments": "Experiments",
-  "/system": "Health",
-  "/architecture": "Architecture",
-  "/audit": "Audit",
+  "/monitoring": "Basin Monitor",
+  "/forecasts": "Next-Month Forecasts",
+  "/network": "River Network DAG",
+  "/alerts": "Risk Alerts",
+  "/water-availability": "Water Availability",
+  "/explorer": "HUC12 Explorer",
+  "/graph": "Graph Intelligence",
+  "/features": "Feature Intelligence",
+  "/models": "Model Intelligence",
+  "/validation": "Stress-Test Validation",
+  "/ablations": "Ablation Study",
+  "/inference": "AI Inference Control Plane",
+  "/system": "System Health",
+  "/architecture": "Architecture & Methodology",
+  "/audit": "Audit Logs",
   "/settings": "Settings",
+  "/stations": "HUC12 Explorer",
+  "/data-quality": "Feature Intelligence",
+  "/experiments": "Stress-Test Validation",
 };
 
 function Topbar() {
@@ -288,19 +311,18 @@ function Topbar() {
         </button>
 
         <div className="flex items-center gap-2 text-xs font-mono">
-          <span className="font-semibold text-fg tracking-wide">ANCHOR</span>
+          <span className="font-semibold text-fg tracking-wide">TIRTA</span>
           <span className="text-fg-faint">/</span>
           <span className="text-fg-muted font-medium">{pageTitle}</span>
           <span className="hidden sm:inline text-fg-faint">·</span>
-          <span className="hidden sm:inline text-[11px] text-fg-subtle">Production · Demo</span>
-          <span className="hidden sm:inline"><LiveJakartaClock data={data} /></span>
+          <span className="hidden sm:inline text-[11px] text-fg-subtle">IFEST DAC 2026 · Demo</span>
+          <span className="hidden sm:inline"><LiveSimulationClock data={data} /></span>
         </div>
 
-        {/* Operational warning indicator — only visible when there's an actual incident */}
         {hasCriticalIncident && (
           <span className="ml-2 inline-flex items-center gap-1.5 text-[11px] font-mono text-crit bg-crit-dim/40 px-2 py-0.5 rounded border border-[#5c1e20]">
             <span className="h-1.5 w-1.5 rounded-full bg-crit" />
-            Active Alert
+            Stress Alert Active
           </span>
         )}
       </div>
@@ -314,11 +336,11 @@ function Topbar() {
           aria-label="Open global search"
         >
           <Search className="h-3 w-3 shrink-0" />
-          <span className="flex-1 text-left truncate text-[11px] font-mono">Search…</span>
+          <span className="flex-1 text-left truncate text-[11px] font-mono">Search HUC12, models…</span>
           <kbd className="hidden sm:inline font-mono text-[10px] text-fg-faint bg-surface-0 px-1 rounded border border-border">⌘K</kbd>
         </button>
 
-        {/* ANCHOR Intelligence Assistant Trigger */}
+        {/* TIRTA Intelligence Assistant Trigger */}
         <button
           onClick={() => setAssistant(!assistantOpen)}
           className={cn(
@@ -327,7 +349,7 @@ function Topbar() {
               ? "bg-surface-3 border-water text-fg"
               : "bg-surface-1 border-border text-fg-muted hover:text-fg"
           )}
-          title="Toggle ANCHOR Intelligence Assistant (⌘J)"
+          title="Toggle TIRTA Intelligence Assistant (⌘J)"
         >
           <Sparkles className="h-3 w-3 text-water" />
           <span className="hidden sm:inline">Assistant</span>
@@ -377,39 +399,35 @@ function Topbar() {
             aria-label="User profile and role menu"
           >
             <span className="flex h-4 w-4 items-center justify-center rounded bg-surface-2 text-[10px] text-water font-mono font-medium">
-              {user?.initials ?? "?"}
+              {user?.initials ?? "TO"}
             </span>
             <span className="hidden md:inline text-[11px]">
-              {user?.role ? ROLE_LABELS[user.role] : "Guest"}
+              {user?.role ? ROLE_LABELS[user.role] : "Operator"}
             </span>
             <ChevronDown className={cn("h-3 w-3 text-fg-subtle transition-transform", menu && "rotate-180")} />
           </button>
 
           {menu && (
             <>
-              {/* Invisible backdrop to dismiss menu on click outside */}
               <div className="fixed inset-0 z-30" onClick={() => setMenu(false)} />
-
               <div role="menu" className="absolute right-0 top-full z-40 mt-1 w-64 panel p-2 shadow-2xl fade-up font-mono">
-                {/* User info */}
                 <div className="px-2 py-1.5 border-b border-border-subtle mb-1.5">
-                  <div className="text-xs font-medium text-fg">{user?.name}</div>
-                  <div className="text-[10px] text-fg-subtle truncate">{user?.email}</div>
+                  <div className="text-xs font-medium text-fg">{user?.name ?? "TIRTA Operator"}</div>
+                  <div className="text-[10px] text-fg-subtle truncate">{user?.email ?? "operator@tirta.id"}</div>
                   <div className="mt-1">
                     <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-water border border-border">
-                      Active: {user?.role ? ROLE_LABELS[user.role] : "Guest"}
+                      Active: {user?.role ? ROLE_LABELS[user.role] : "Operator"}
                     </span>
                   </div>
                 </div>
 
-                {/* Role switcher list */}
                 <div className="mb-1.5">
                   <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-fg-faint">Switch Demo Role</div>
                   {(
                     [
-                      { role: "administrator", label: "Administrator", desc: "Full access (Settings, Health, Audit)" },
-                      { role: "data_scientist", label: "Data Scientist", desc: "Models, Inference, Experiments" },
-                      { role: "operator", label: "Operator", desc: "Monitoring, Forecasts, Alerts" },
+                      { role: "administrator", label: "Watershed Administrator", desc: "System Health, Settings, Audit" },
+                      { role: "data_scientist", label: "Data Scientist / ML", desc: "Models, Validation, GNN Research" },
+                      { role: "operator", label: "Water Operator", desc: "Monitoring, Forecasts, Alerts" },
                     ] as const
                   ).map((r) => {
                     const isCurrent = user?.role === r.role;
@@ -441,7 +459,6 @@ function Topbar() {
                   })}
                 </div>
 
-                {/* Theme selector */}
                 <div className="border-t border-border-subtle pt-1.5 pb-1 mb-1">
                   <div className="px-2 py-0.5 text-[10px] uppercase tracking-wider text-fg-faint">Appearance</div>
                   <div className="grid grid-cols-3 gap-1 px-1 mt-1">
@@ -465,7 +482,6 @@ function Topbar() {
                   </div>
                 </div>
 
-                {/* Sign out */}
                 <div className="border-t border-border-subtle pt-1">
                   <button
                     role="menuitem"
@@ -535,7 +551,7 @@ function CommandPalette() {
             ref={inputRef}
             type="text"
             className="w-full bg-transparent text-xs text-fg placeholder:text-fg-subtle focus:outline-none font-mono"
-            placeholder="Search stations, alerts, models, traces…"
+            placeholder="Search HUC12 sub-basins, alerts, models, traces…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -545,7 +561,7 @@ function CommandPalette() {
         <div className="max-h-72 overflow-y-auto p-1 font-mono text-xs">
           {!query && (
             <div className="p-2 text-fg-subtle text-[11px]">
-              Type station ID (e.g. BS-017), river reach, alert title, or model version…
+              Type HUC12 ID (e.g. HUC-DEMO-0014), river branch, alert, or model version…
             </div>
           )}
           {search.data && search.data.length === 0 && query && (
@@ -590,7 +606,7 @@ function NotificationCenter() {
       <aside className="fixed inset-y-0 right-0 w-full max-w-sm bg-surface-1 border-l border-border shadow-2xl flex flex-col slide-in-right">
         <header className="flex items-center justify-between px-4 py-3 border-b border-border bg-surface-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-xs font-semibold text-fg font-mono uppercase tracking-wider">Operational Events</h2>
+            <h2 className="text-xs font-semibold text-fg font-mono uppercase tracking-wider">Water-Stress Events</h2>
             <span className="text-[10px] mono text-fg-subtle">{items.length}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -614,7 +630,7 @@ function NotificationCenter() {
                   >
                     <div className="text-xs font-medium text-fg">{n.title}</div>
                     {n.body && <div className="t-caption mt-0.5 text-fg-subtle">{n.body}</div>}
-                    <div className="text-[10px] font-mono text-fg-faint mt-1">{fmtRelative(n.timestamp, Date.now())}</div>
+                    <div className="text-[10px] font-mono text-fg-faint mt-1">Operational Event</div>
                   </button>
                   <button className="btn btn-ghost btn-sm !h-5 !w-5 !p-0 text-fg-faint hover:text-fg" onClick={() => dismiss(n.id)}>
                     <X className="h-3 w-3" />
@@ -638,16 +654,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const theme = useUiStore((s) => s.theme);
   const toggleAssistant = useUiStore((s) => s.toggleAssistant);
   const router = useRouter();
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => setHydrated(true), []);
+  const hydrated = useIsMounted();
 
   useEffect(() => {
     if (hydrated && !user) router.replace("/login");
   }, [hydrated, user, router]);
 
-  // Synchronize document data-theme with theme store
   useEffect(() => {
+    if (!hydrated) return;
     const apply = () => {
       let resolved = theme;
       if (theme === "system") {
@@ -670,9 +684,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       media.addEventListener("change", listener);
       return () => media.removeEventListener("change", listener);
     }
-  }, [theme]);
+  }, [hydrated, theme]);
 
-  // Global shortcut for ANCHOR Assistant (⌘J / Ctrl+J)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
@@ -688,7 +701,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return (
       <div className="flex h-screen items-center justify-center bg-bg">
         <div className="flex items-center gap-2 text-fg-subtle text-xs font-mono">
-          <Anchor className="h-4 w-4 animate-pulse text-water" /> Establishing session…
+          <Droplets className="h-4 w-4 animate-pulse text-water" /> Initializing TIRTA session…
         </div>
       </div>
     );

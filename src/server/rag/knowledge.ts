@@ -1,11 +1,22 @@
 /**
- * Curated knowledge corpus for ANCHOR Hydrological Intelligence Platform.
- * Used for strict domain retrieval and grounded answer generation.
+ * Curated knowledge corpus for TIRTA (Topology-Informed River Transmission Alert).
+ * Used for strict domain retrieval and grounded answer generation in the TIRTA Assistant.
  */
 
 export interface KnowledgeDocument {
   id: string;
-  topic: "overview" | "methodology" | "segmentation" | "spatial" | "performance" | "data_quality" | "inference" | "alerts" | "stations";
+  topic:
+    | "overview"
+    | "methodology"
+    | "directed_graph"
+    | "reachability"
+    | "validation"
+    | "gbdt_ensemble"
+    | "directed_gnn"
+    | "cold_start"
+    | "performance"
+    | "data_integrity"
+    | "alerts";
   title: string;
   section: string;
   stationId?: string;
@@ -18,176 +29,162 @@ export const KNOWLEDGE_CORPUS: KnowledgeDocument[] = [
   {
     id: "kb-overview-1",
     topic: "overview",
-    title: "ANCHOR Platform Overview",
-    section: "System Mission and Watershed Context",
-    keywords: ["anchor", "bengawan solo", "kali madiun", "watershed", "river", "purpose", "mission", "das", "overview"],
-    content: `ANCHOR stands for Adaptive Node Categorization with Direct-Horizon Optimization and Reconciliation.
-It is an operational hydrological intelligence platform purpose-built for the Bengawan Solo watershed (the longest river system in Java, Indonesia, covering over 16,100 km² drainage basin).
-The network monitors 30 hydrological stations across East and Central Java: 25 stations on the primary Bengawan Solo mainstem and Kali Madiun sub-basin graph, and 5 auxiliary basin stations.
-The platform continuously tracks River Water Level (TMA - Tinggi Muka Air) in metres, predicts water level trajectory up to 72 hours forward, evaluates flood exceedance probabilities, and provides spatial routing intelligence.`,
+    title: "TIRTA Platform Overview",
+    section: "Product Identity and Scientific Mission",
+    keywords: ["tirta", "topology", "river transmission", "alert", "water stress", "huc12", "ifest", "dac", "purpose", "mission"],
+    content: `TIRTA stands for Topology-Informed River Transmission Alert.
+It is an operational AI early-warning and river-basin intelligence platform designed for next-month water-stress risk forecasting across interconnected HUC12 sub-basins, developed for the IFEST DAC 2026 competition.
+Spatial unit: HUC12 sub-basins.
+Forecast horizon: Next Month (Month t+1).
+Primary evaluation metric: Average Precision (PR-AUC).
+Topology: Physical directed river graph derived from id -> to_id downstream routing.
+The system serves water-resource agencies, drought planners, hydrology analysts, and watershed managers.`,
   },
   {
-    id: "kb-overview-2",
-    topic: "overview",
-    title: "ANCHOR Platform Overview",
-    section: "Operational Identities and Access Scope",
-    keywords: ["roles", "operator", "data scientist", "administrator", "access", "permissions"],
-    content: `ANCHOR features 3 operational identities:
-1. Operator (Dewi Santoso): Real-time watershed surveillance, alert acknowledgement, forecast inspection, threshold breach monitoring.
-2. Data Scientist (Arif Prasetyo): Model performance benchmarks, ablation experiments, feature attribution, inference traces, and sensor data quality analytics.
-3. Administrator (admin.ops): System infrastructure health, audit trail compliance, database configuration, and security settings.`,
-  },
-  {
-    id: "kb-methodology-1",
+    id: "kb-problem-1",
     topic: "methodology",
-    title: "Forecasting Methodology",
-    section: "Direct Multi-Horizon Heads vs. Autoregressive Rollout",
-    keywords: ["direct multi-horizon", "horizon", "methodology", "autoregressive", "heads", "forecast", "quantiles", "pinball loss", "kenapa direct"],
-    content: `Why ANCHOR uses Direct Multi-Horizon forecasting:
-Standard autoregressive time-series models (predicting t+1, then feeding t+1 back to predict t+2) suffer from exponential error accumulation and compounding bias during sudden flash-flood surges.
-Instead, ANCHOR deploys dedicated Direct Multi-Horizon prediction heads for 6h, 12h, 24h, 48h, and 72h lead times.
-Each horizon head is independently optimized using gradient-boosted quantile regression (LightGBM and Extra Trees ensemble).
-Quantile loss estimates P05 (lower bound), P50 (median forecast), and P95 (upper bound) to deliver calibrated 90% confidence bands rather than brittle point estimates.`,
+    title: "Scientific Problem & Target Formulation",
+    section: "Continuous Probability and Dataset Geometry",
+    keywords: ["dataset", "target", "probability", "pr-auc", "average precision", "rows", "origins", "huc12"],
+    content: `The competition task is to predict next-month water-stress risk: P(water stress at month t+1) in [0, 1].
+Core dataset scale:
+- 378,780 training rows across 2,196 historical HUC12 sub-basins.
+- 11,928 test rows across 2,982 test HUC12 sub-basins.
+- 168 historical monthly origins (reconstructed into 14 annual blocks with September → August chronology).
+- 4 future test origins concentrated in February, April, October, and December.
+- Historical positive water-stress prevalence: ~20.4%.
+- Evaluation metric: Average Precision (PR-AUC).`,
   },
   {
-    id: "kb-segmentation-1",
-    topic: "segmentation",
-    title: "Station Segmentation Architecture",
-    section: "Categorization: Natural vs. Dam/Weir vs. Mixed Reaches",
-    keywords: ["segmentation", "natural", "dam", "weir", "mixed", "category", "perbedaan", "waduk", "bendungan", "kategori"],
-    content: `ANCHOR segments the 30 monitoring stations into three hydrological categories based on hydraulic behavior:
-1. NATURAL (16 stations, e.g., BS-008 Badegan, BS-017 Karanggeneng): Free-flowing river reaches governed by upstream rainfall-runoff, channel geometry, and gravitational transit time. Routed directly through rainfall-lag features and spatial graph reconciliation.
-2. DAM_WEIR (8 stations, e.g., BS-005 Waduk Wonogiri, BS-016 Babat Barrage): Heavily controlled reservoirs and barrages where water levels are dominated by human gate operations, spillway release schedules, and retention storage curves rather than passive hydraulics.
-3. MIXED (6 stations, e.g., BS-019 Ujung Pangkah Estuary, BS-030 Bengawan Jero): Complex hydraulic environments influenced by tidal backwater surges, confluence mixing, and active polder drainage pump actuation.
-Total count: 16 Natural stations, 8 Dam/Weir stations, and 6 Mixed stations.`,
+    id: "kb-lineage-1",
+    topic: "data_integrity",
+    title: "Temporal Lineage Reconstruction",
+    section: "Solving the Hidden Origin Timeline",
+    keywords: ["temporal lineage", "timeline", "fingerprint", "lags", "origins", "chronology", "reconstruction"],
+    content: `Training data provided monthly snapshots with unlabelled origin identifiers.
+Because monthly lag features share temporal fingerprints between true consecutive months:
+q(t)_lag0 ≈ q(t+1)_lag1  and  q(t)_lag1 ≈ q(t+1)_lag2.
+By evaluating cross-origin correlation across hundreds of HUC12 sub-basins, the team reconstructed all 168 origins into an unbroken chronological sequence of 14 annual cycles (14 × 12 months), following an inferred September → August annual hydrological year.
+This discovery was critical to preventing temporal leakage during validation.`,
   },
   {
-    id: "kb-spatial-1",
-    topic: "spatial",
-    title: "Spatial Graph Reconciliation",
-    section: "Topological Residual Propagation and Physical Consistency",
-    keywords: ["spatial reconciliation", "graph", "residual", "propagation", "topology", "upstream", "downstream", "pengaruh spatial"],
-    content: `Spatial Graph Reconciliation is ANCHOR's post-processing hydrodynamic reconciliation layer.
-River reaches are represented as a directed acyclic graph (DAG) following the physical flow of the Bengawan Solo river network.
-When an upstream station (such as BS-008 Badegan) observes a sudden positive residual anomaly (water level rising faster than the unconstrained ML head predicted due to localized convective cloudburst), the spatial reconciler propagates this residual downstream to Ponorogo (BS-009) → Madiun (BS-011) → Kwadungan (BS-012) using transit-delay damping.
-Effect: It eliminates physically impossible forecast inversions (where a downstream station drops while a massive upstream flood crest is traveling toward it) and reduces holdout RMSE from 0.9410 to 0.8387 m (−10.9% error reduction).`,
+    id: "kb-validation-1",
+    topic: "validation",
+    title: "Stress-Test Validation Framework",
+    section: "Chronology-Aware Forward Validation vs. Naive Random CV",
+    keywords: ["validation", "stress-test", "chronology", "forward validation", "random cv", "leakage", "holdout"],
+    content: `Why Naive Random CV fails: Rows one month apart share 11 of 12 lag values. Random IID splits produce misleadingly high AP (~0.8421) that fails to generalize.
+TIRTA implements Stress-Test Validation (Chronology-Aware Forward Validation) with four safeguards:
+1. Temporal Lineage Reconstruction: enforces strict T_train < T_val constraint.
+2. Temporal Gap: separates training from evaluation to mirror operational lead-time.
+3. Whole-Basin Holdout: evaluates cold-start spatial generalization on basins never seen during training.
+4. Climatology Masking: ensures seasonal baseline anomalies are evaluated on future-like origin distributions.
+Stress-test validation AP aligns faithfully with public leaderboard behavior.`,
+  },
+  {
+    id: "kb-graph-1",
+    topic: "directed_graph",
+    title: "Directed River Topology (id -> to_id)",
+    section: "Physical Flow Directionality",
+    keywords: ["directed river graph", "id", "to_id", "topology", "dag", "flow", "upstream", "downstream"],
+    content: `Dataset relation: id -> to_id represents physical downstream river flow from node to receiving downstream node.
+The graph is directed and acyclic (DAG).
+The network distinguishes:
+- Upstream tributary drainage networks.
+- Target HUC12 sub-basin.
+- Downstream receiving channels and terminal outlets.
+TIRTA extracts topological depth, distance to ocean outlet, headwater status, and connected basin counts.`,
+  },
+  {
+    id: "kb-reachability-1",
+    topic: "reachability",
+    title: "Directed Multi-Hop Reachability",
+    section: "1–3 Hop Upstream & Downstream Context",
+    keywords: ["multi-hop reachability", "1-hop", "2-hop", "3-hop", "reachability", "upstream mean supply", "node anomaly"],
+    content: `Directed Multi-Hop Reachability exposes:
+N_upstream^1(v), N_upstream^2(v), N_upstream^3(v)
+and downstream paths.
+Key engineered signals:
+- Upstream mean supply (1–3 hops).
+- Upstream minimum supply.
+- Upstream withdrawal pressure.
+- Maximum upstream risk score.
+- Node-vs-upstream anomaly (contrast between local supply and contributing upstream network).
+- Reachable basin count and outlet distance.`,
+  },
+  {
+    id: "kb-water-budget-1",
+    topic: "methodology",
+    title: "Water-Budget Intelligence & Proxies",
+    section: "Physical Drivers and SUI-Like Limitation Proxy",
+    keywords: ["water availability", "streamflow", "baseflow", "quickflow", "withdrawal", "sui", "limitation proxy"],
+    content: `Core hydrological quantities: streamflow, baseflow, quickflow, cumulative supply, irrigation withdrawal, public supply withdrawal, thermoelectric withdrawal, climatology, seasonal anomaly.
+Conceptual relationship:
+Water Availability Proxy ≈ Water Supply − Withdrawal Pressure.
+Relative Water Limitation ≈ 1 − (Availability / Typical Seasonal Supply).
+UI language explicitly notes this as an analytical 'SUI-like proxy' or 'Water-limitation proxy', never as an official SUI.`,
+  },
+  {
+    id: "kb-models-1",
+    topic: "gbdt_ensemble",
+    title: "Modeling Path A: GBDT Ensemble",
+    section: "CatBoost, LightGBM, and XGBoost Roles",
+    keywords: ["gbdt", "catboost", "lightgbm", "xgboost", "ensemble", "tabular"],
+    content: `Modeling Path A uses gradient-boosted decision trees over the unified 25-dimensional feature space (local hydrology, withdrawals, climatology, and 3-hop directed reachability):
+- CatBoost: Primary nonlinear tabular learner (iterations 375, depth 7, lr 0.045).
+- LightGBM: Complementary leaf-wise tree booster (num_leaves 31, lr 0.025).
+- XGBoost: Regularized depth-wise boosting for model diversity (max_depth 7, lr 0.03).
+Optimal blend weights determined via Dirichlet search: CatBoost 0.625, LightGBM 0.225, XGBoost 0.150.`,
+  },
+  {
+    id: "kb-gnn-1",
+    topic: "directed_gnn",
+    title: "Modeling Path B: Directed Reachability GNN",
+    section: "Neural Message Passing on River Networks",
+    keywords: ["gnn", "directed reachability gnn", "message passing", "layers", "pytorch", "research"],
+    content: `Directed Reachability GNN architecture:
+- Input: 25 hydrological and water-budget node features.
+- Adjacency: Sparse upstream and downstream reachability operators with decay factor 0.70^k for hops 1..3.
+- Layers: 3 Directed Reachability layers with independent upstream linear projections, downstream projections, GELU activations, LayerNorm, and residual skip connections.
+- Status: RESEARCH candidate.
+- Strict temporal validation AP: 0.7641.`,
   },
   {
     id: "kb-performance-1",
     topic: "performance",
-    title: "Model Performance and Evaluation",
-    section: "Production Metrics for anchor-prod-v2.4.1",
-    keywords: ["rmse", "mae", "r2", "metrics", "holdout", "performance", "anchor-prod-v2.4.1", "evaluasi", "akurasi", "berapa rmse"],
-    content: `Production Model Specifications (anchor-prod-v2.4.1):
-- Holdout RMSE: 0.8387 metres (evaluated on internal holdout window 19 Sep 2025 – 18 May 2026 across 21,780 test observations).
-- Mean Absolute Error (MAE): 0.5391 metres.
-- R² Score: 0.912.
-- 90% Confidence Interval Coverage: 91.4% (well-calibrated against nominal 90% target).
-- Public Benchmark Leaderboard RMSE: 1.56296.
-- Private Benchmark Leaderboard RMSE: 1.61812.
-(Note: Public/private benchmark scores reflect external competitive holdout test sets with differing station baselines, whereas 0.8387 m is the operational multi-station holdout metric).`,
+    title: "Model Performance & Provenance Labels",
+    section: "Public Score vs. Internal Validation Truth",
+    keywords: ["0.7329", "0.7590", "0.7641", "score", "provenance", "public leaderboard", "validation ap"],
+    content: `Performance Score Provenance:
+- 0.7329: VERIFIED PUBLIC SCORE (Tabular baseline CatBoost on Kaggle public leaderboard).
+- 0.7590: STRESS-TEST VALIDATION (CatBoost with 3-hop directed reachability features).
+- 0.7608: INTERNAL VALIDATION (GBDT Ensemble).
+- 0.7641: INTERNAL RESEARCH EVALUATION (Directed Reachability GNN on Block 13 test origin months).
+TIRTA strictly displays provenance badges for every score to maintain complete scientific integrity. 0.7641 is never claimed as a verified public score.`,
   },
   {
-    id: "kb-performance-2",
-    topic: "performance",
-    title: "Model Performance and Evaluation",
-    section: "Benchmark Lineage and Ablation Study",
-    keywords: ["ablation", "lineage", "baseline", "lightgbm", "extra trees", "random forest", "ensemble"],
-    content: `Benchmark Progression:
-1. Climatology Baseline: RMSE 1.8420 m
-2. Persistence Baseline (last known TMA): RMSE 1.4820 m
-3. Global LightGBM (single model without segmentation): RMSE 1.1890 m
-4. Segmented Model (Natural / Dam / Mixed routing): RMSE 1.0420 m
-5. Direct Multi-Horizon Quantile Heads: RMSE 0.9410 m
-6. Spatial Graph Reconciliation Ensemble (anchor-prod-v2.4.1): RMSE 0.8387 m
-Ablation finding: Removing spatial graph reconciliation increases RMSE to 0.9410 m (+12.2% degradation). Removing station segmentation increases RMSE to 1.0420 m (+24.2% degradation).`,
+    id: "kb-cold-start-1",
+    topic: "cold_start",
+    title: "Cold-Start Spatial Generalization",
+    section: "Handling Unseen Test Sub-Basins",
+    keywords: ["cold start", "spatial generalization", "unseen basins", "confidence"],
+    content: `A substantial portion of test HUC12 sub-basins (~26%, 786 basins) are located in watersheds absent from the 14-year training history.
+Rather than generic missing data, TIRTA models this explicitly as cold-start spatial generalization:
+- Basin-specific identity embeddings are decoupled.
+- Topological river DAG reachability and climatological anomaly priors are preserved.
+- Model output confidence is adjusted (uncertainty interval widened from ±0.08 to ±0.15).`,
   },
   {
-    id: "kb-data-quality-1",
-    topic: "data_quality",
-    title: "Sensor Data Quality & Telemetry",
-    section: "Telemetry Ingestion, Missingness and Outliers",
-    keywords: ["data quality", "missing", "outliers", "completeness", "dq", "sensor", "stale", "latency", "anomali", "berapa data missing"],
-    content: `Telemetry and Data Quality Baseline:
-- Training observations: 84,396 (1 Jan 2023 – 18 Sep 2025).
-- Test observations: 21,780 (19 Sep 2025 – 18 May 2026).
-- Missing data points: 4,884 observations across the dataset.
-- Overall missing rate: 5.47% (overall sensor completeness: 94.53%).
-- Flagged physical outliers: 150 points exceeding the 4σ rolling window filter (excluded from model training to prevent gradient corruption).
-- Automatic Anomaly Detectors:
-  1. GAP detector: flags telemetry gaps > 2 hours; linear interpolation is withheld.
-  2. SPIKE detector: detects sudden TMA delta without corresponding upstream or rainfall build-up.
-  3. FLATLINE detector: flags sensors reporting identical continuous float values for > 6 hours (stuck float gauge).
-  4. SCHEMA detector: quarantines packets with corrupt headers or missing rainfall units.`,
-  },
-  {
-    id: "kb-inference-1",
-    topic: "inference",
-    title: "AI Inference System Architecture",
-    section: "Latency, Feature Store and Pipeline Cadence",
-    keywords: ["inference", "latency", "p50", "p95", "feature store", "pipeline", "cadence"],
-    content: `Inference Pipeline Metrics:
-- Median Inference Latency (P50): 164 milliseconds.
-- Tail Latency (P95): 244 milliseconds.
-- Pipeline Cadence: Batch forecast cycles trigger every 10 minutes, generating 210 predictions across 30 stations and 7 horizons.
-- On-Demand Inference: Operators can manually trigger instant re-inference for any station with trace logging.
-- Trace Identifiers: Every inference execution emits a deterministic requestId (e.g., req_8f2c9a31) and traceId for full operational auditability.`,
-  },
-  {
-    id: "kb-alerts-1",
-    topic: "alerts",
-    title: "Operational Alerting Framework",
-    section: "Severity Thresholds and Escalation Policy",
-    keywords: ["alert", "warning", "critical", "threshold", "tma", "acknowledge", "resolve", "snooze", "policy", "station mana yang warning"],
-    content: `Alert Severity Definitions:
-1. CRITICAL: Observed or 6h forecasted TMA ≥ 100% of station alert threshold (e.g. BS-030 Bengawan Jero ≥ 2.90 m). Demands immediate downstream barrage coordination and provincial civil protection notification.
-2. WARNING: TMA ≥ 80% of alert threshold with positive trend (> +0.08 m/h).
-3. MODERATE: TMA ≥ 60% of alert threshold.
-4. DATA_QUALITY: Sensor stale > 3 hours or packet latency > 30 minutes (e.g., BS-027 Lorog stale telemetry).
-5. MODEL: Inference confidence drops below 70% or residual error exceeds 3σ (e.g., BS-019 tidal degradation).
-Operators can Acknowledge (assigns handler), Resolve (closes incident), or Snooze (silences alert for 30–60 min).`,
-  },
-  {
-    id: "kb-stations-1",
-    topic: "stations",
-    title: "Key Monitoring Stations",
-    section: "BS-017 Karanggeneng Station Profile",
-    stationId: "BS-017",
-    keywords: ["bs-017", "karanggeneng", "kenapa bs-017", "rising", "alert-1412"],
-    content: `Station Profile: BS-017 (Karanggeneng)
-- Basin: Bengawan Solo Hilir (Lowland mainstem reach).
-- Category: NATURAL.
-- Warning Threshold: 4.64 m. Alert/Critical Threshold: 5.80 m.
-- Current Telemetry: 4.71 m (exceeding warning threshold, active alert ALR-1412).
-- Trend: Rising (+0.04 m/h) due to upstream flood propagation from Babat Barrage (BS-016) and convective rainfall in Bojonegoro.
-- Downstream Target: Sembayat Barrage (BS-021), currently operating with gates open at 40% capacity to absorb inflow.
-- Forecast: Projected to rise to 4.88 m over the next 12h before cresting as upstream hydrographs flatten.`,
-  },
-  {
-    id: "kb-stations-2",
-    topic: "stations",
-    title: "Key Monitoring Stations",
-    section: "BS-008 Badegan Station Profile",
-    stationId: "BS-008",
-    keywords: ["bs-008", "badegan", "kali madiun", "upstream"],
-    content: `Station Profile: BS-008 (Badegan)
-- Basin: Upper Kali Madiun sub-basin (Headwaters reach).
-- Category: NATURAL.
-- Warning Threshold: 3.20 m. Alert Threshold: 3.80 m.
-- Current Telemetry: Steady at 1.84 m in base conditions; serves as the primary early-warning sensor for the Madiun flash-flood scenario.
-- Hydrodynamic Transit Time: Flood crests at Badegan propagate to Ponorogo (BS-009) in ~3.5 hours and to Madiun city (BS-011) in ~7 hours.`,
-  },
-  {
-    id: "kb-stations-3",
-    topic: "stations",
-    title: "Key Monitoring Stations",
-    section: "BS-030 Bengawan Jero Station Profile",
-    stationId: "BS-030",
-    keywords: ["bs-030", "bengawan jero", "polder", "pompa"],
-    content: `Station Profile: BS-030 (Bengawan Jero)
-- Basin: Lamongan Lowland Polder System.
-- Category: MIXED.
-- Warning Threshold: 2.32 m. Alert Threshold: 2.90 m.
-- Characteristics: Vulnerable to backwater stagnation when Bengawan Solo mainstem is high. Polder drainage pump operations dictate water level drawdowns. Model residual monitoring active (ALR-1407) due to pump cycle step changes.`,
+    id: "kb-ablations-1",
+    topic: "methodology",
+    title: "Ablation Study Key Findings",
+    section: "Empirical Evidence Across Feature Families",
+    keywords: ["ablation", "findings", "supported", "rejected", "overfit", "climatology"],
+    content: `Key findings:
+1. Climatology Anomaly (+0.0482 AP, SUPPORTED): Strongest single feature family by a wide margin.
+2. Directed Multi-Hop Reachability (+0.0261 AP, SUPPORTED): Upstream deficits reliably predict downstream stress.
+3. Temporal Lineage (+0.0215 AP, SUPPORTED): Essential for unbiased chronological validation.
+4. Month-Specific Sub-Models (-0.0194 AP, OVERFIT): Degraded forward generalization due to limited historical years per month.
+5. Aggressive Reranking (-0.0284 AP, REJECTED): Distorted natural seasonal prevalence differences.`,
   },
 ];

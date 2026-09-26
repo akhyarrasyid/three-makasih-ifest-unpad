@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { jakartaDayjs } from "@/lib/time";
 
 export interface LiveJakartaTime {
@@ -13,33 +13,42 @@ export interface LiveJakartaTime {
   dayName: string;
 }
 
+const emptySubscribe = () => () => {};
+
+export function useIsMounted(): boolean {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+}
+
 /**
  * React hook providing a live-ticking clock anchored strictly to Asia/Jakarta (WIB / UTC+7).
  * Safe from Next.js SSR hydration mismatch.
  */
 export function useLiveJakartaTime(refreshIntervalMs = 1000): LiveJakartaTime {
-  const [now, setNow] = useState<number>(() => Date.now());
-  const [mounted, setMounted] = useState<boolean>(false);
+  const mounted = useIsMounted();
+  const timestamp = useSyncExternalStore(
+    (onStoreChange) => {
+      const interval = setInterval(onStoreChange, refreshIntervalMs);
+      return () => clearInterval(interval);
+    },
+    () => Date.now(),
+    () => 0
+  );
 
-  useEffect(() => {
-    setMounted(true);
-    setNow(Date.now());
-    const interval = setInterval(() => {
-      setNow(Date.now());
-    }, refreshIntervalMs);
-    return () => clearInterval(interval);
-  }, [refreshIntervalMs]);
-
-  const jTime = jakartaDayjs(now);
+  const activeTimestamp = timestamp > 0 ? timestamp : 1774579200000;
+  const jTime = jakartaDayjs(activeTimestamp);
 
   return {
-    timestamp: now,
+    timestamp: activeTimestamp,
     mounted,
-    timeWithSeconds: jTime.format("HH:mm:ss"),
-    timeShort: jTime.format("HH:mm"),
+    timeWithSeconds: mounted ? jTime.format("HH:mm:ss") : "--:--:--",
+    timeShort: mounted ? jTime.format("HH:mm") : "--:--",
     timeZoneSuffix: "WIB",
-    fullTime: `${jTime.format("HH:mm:ss")} WIB`,
-    dateFormatted: jTime.format("DD MMM YYYY"),
-    dayName: jTime.format("dddd"),
+    fullTime: mounted ? `${jTime.format("HH:mm:ss")} WIB` : "--:--:-- WIB",
+    dateFormatted: mounted ? jTime.format("DD MMM YYYY") : "---",
+    dayName: mounted ? jTime.format("dddd") : "---",
   };
 }

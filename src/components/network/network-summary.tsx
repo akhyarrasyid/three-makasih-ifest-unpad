@@ -1,9 +1,8 @@
 "use client";
-import { useMemo } from "react";
 import type { NetworkFilterMode } from "./network-types";
-import { STATIC_STATION_MAP, NETWORK_METRICS } from "@/data/network-static";
+import { STATIC_STATION_MAP, NETWORK_METRICS, STATIC_STATIONS } from "@/data/network-static";
 import { cn } from "@/lib/utils";
-import { X, Network, Globe } from "lucide-react";
+import { X } from "lucide-react";
 
 interface NetworkSummaryProps {
   selectedStationId: string | null;
@@ -32,30 +31,30 @@ export function NetworkSummary({
         "panel p-3 shadow-lg bg-surface-0/95 border border-border max-w-[420px] select-none",
         className
       )}
-      aria-label="Hydrological Network Operational Summary"
+      aria-label="HUC12 Directed River Network Operational Summary"
     >
-      {/* 1. Geographic Context Breadcrumb */}
+      {/* 1. Geospatial & Hydrological Context Breadcrumb */}
       <div className="flex items-center gap-1.5 font-mono text-[10px] text-fg-subtle tracking-wider uppercase">
-        <span>Indonesia</span>
+        <span>TIRTA</span>
         <span className="text-fg-faint">/</span>
-        <span>Java</span>
+        <span>HUC12 Sub-Basins</span>
         <span className="text-fg-faint">/</span>
-        <span className="text-fg-muted font-medium">Bengawan Solo Basin</span>
+        <span className="text-fg-muted font-medium">Directed River Graph</span>
       </div>
 
       {/* 2. Primary Title & Operational Status */}
       <div className="mt-1 flex items-baseline justify-between gap-2 border-b border-border/70 pb-2">
         <div>
           <h1 className="text-sm font-semibold text-fg tracking-tight flex items-center gap-2">
-            <span>River Monitoring Network</span>
+            <span>Directed River Network</span>
           </h1>
           <p className="text-[11px] font-mono text-fg-subtle mt-0.5">
-            {NETWORK_METRICS.totalStations} Monitored Stations · {NETWORK_METRICS.primaryStations} Primary · {NETWORK_METRICS.outsideStations} Outside
+            {NETWORK_METRICS.demoSubBasins} Demo Sub-Basins · {NETWORK_METRICS.totalTestHuc12.toLocaleString()} Total HUC12 Basins
           </p>
         </div>
         <div className="text-right shrink-0">
-          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 font-medium">
-            1 Connected Tree
+          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 font-medium">
+            DAG Topology
           </span>
         </div>
       </div>
@@ -63,38 +62,38 @@ export function NetworkSummary({
       {/* 3. Compact Operational Metadata Summary */}
       <div className="mt-2.5 grid grid-cols-4 gap-1.5 font-mono">
         <div className="border border-border/80 bg-surface-1/60 rounded px-2 py-1.5 text-center">
-          <div className="text-[9px] uppercase tracking-wider text-fg-subtle">Stations</div>
-          <div className="text-xs font-semibold text-fg mt-0.5">30 Total</div>
-          <div className="text-[9px] text-fg-subtle">25 / 5</div>
+          <div className="text-[9px] uppercase tracking-wider text-fg-subtle">DAG Nodes</div>
+          <div className="text-xs font-semibold text-fg mt-0.5">{STATIC_STATIONS.length} Demo</div>
+          <div className="text-[9px] text-fg-subtle">{NETWORK_METRICS.totalTestHuc12.toLocaleString()} total</div>
         </div>
 
         <div className="border border-border/80 bg-surface-1/60 rounded px-2 py-1.5 text-center">
-          <div className="text-[9px] uppercase tracking-wider text-fg-subtle">Topology</div>
-          <div className="text-xs font-semibold text-emerald-400 mt-0.5">1 Tree</div>
-          <div className="text-[9px] text-fg-subtle">24 Links</div>
+          <div className="text-[9px] uppercase tracking-wider text-fg-subtle">Structure</div>
+          <div className="text-xs font-semibold text-cyan-400 mt-0.5">{NETWORK_METRICS.directedEdges} Edges</div>
+          <div className="text-[9px] text-fg-subtle">Depth {NETWORK_METRICS.maxGraphDepth}</div>
         </div>
 
         <div className="border border-border/80 bg-surface-1/60 rounded px-2 py-1.5 text-center">
-          <div className="text-[9px] uppercase tracking-wider text-fg-subtle">Mean Spacing</div>
-          <div className="text-xs font-semibold text-water mt-0.5">{NETWORK_METRICS.meanSpacingKm} km</div>
-          <div className="text-[9px] text-fg-subtle">River reach</div>
+          <div className="text-[9px] uppercase tracking-wider text-fg-subtle">Origins</div>
+          <div className="text-xs font-semibold text-water mt-0.5">{NETWORK_METRICS.headwaterNodes} Heads</div>
+          <div className="text-[9px] text-fg-subtle">{NETWORK_METRICS.outletNodes} Outlets</div>
         </div>
 
         <div className="border border-border/80 bg-surface-1/60 rounded px-2 py-1.5 text-center">
-          <div className="text-[9px] uppercase tracking-wider text-fg-subtle">Coverage</div>
-          <div className="text-xs font-semibold text-fg mt-0.5">{NETWORK_METRICS.coveragePercent}%</div>
-          <div className="text-[9px] text-fg-subtle">Primary basin</div>
+          <div className="text-[9px] uppercase tracking-wider text-fg-subtle">Cold Start</div>
+          <div className="text-xs font-semibold text-amber-400 mt-0.5">{NETWORK_METRICS.coldStartNodes} Nodes</div>
+          <div className="text-[9px] text-fg-subtle">Holdout Basins</div>
         </div>
       </div>
 
-      {/* 4. Active Selection Focus Bar (if a station is clicked) */}
+      {/* 4. Active Selection Focus Bar (if a HUC is clicked) */}
       {selectedStation && (
         <div className="mt-2.5 flex items-center justify-between gap-2 rounded border border-water/40 bg-water/5 px-2.5 py-1.5 font-mono text-xs">
           <div className="flex items-center gap-2 truncate">
             <span
               className={cn(
                 "h-2 w-2 rounded-full shrink-0",
-                selectedStation.primary ? "bg-water" : "bg-fg-subtle"
+                selectedStation.coldStart ? "bg-amber-400" : "bg-water"
               )}
             />
             <span className="font-medium text-fg truncate">
@@ -104,13 +103,12 @@ export function NetworkSummary({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {selectedStation.primary ? (
-              <span className="text-[10px] text-fg-subtle">
-                ↑ {upstreamCount} · ↓ {downstreamCount}
-              </span>
-            ) : (
-              <span className="text-[10px] text-fg-subtle italic">
-                Outside Network
+            <span className="text-[10px] text-fg-subtle">
+              ↑ {upstreamCount} up · ↓ {downstreamCount} down
+            </span>
+            {selectedStation.coldStart && (
+              <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                Cold-Start
               </span>
             )}
             {onClearSelection && (
@@ -118,7 +116,7 @@ export function NetworkSummary({
                 onClick={onClearSelection}
                 className="text-fg-subtle hover:text-fg p-0.5 rounded transition-colors"
                 title="Clear selection"
-                aria-label="Clear station selection"
+                aria-label="Clear sub-basin selection"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -127,49 +125,34 @@ export function NetworkSummary({
         </div>
       )}
 
-      {/* 5. Clean Scope Filter Toggle: ALL (30) | PRIMARY (25) | OUTSIDE (5) */}
+      {/* 5. Clean Scope Filter Toggle: ALL | HEADWATERS | MAINSTEM | COLD_START */}
       <div className="mt-2.5 pt-2 border-t border-border/70 flex items-center justify-between gap-2">
         <span className="font-mono text-[10px] uppercase text-fg-subtle tracking-wider">
-          Filter View
+          Filter Sub-Basins
         </span>
 
         <div className="flex items-center rounded border border-border bg-surface-1 p-0.5 font-mono text-xs">
-          <button
-            onClick={() => onFilterChange("ALL")}
-            className={cn(
-              "px-2.5 py-1 rounded transition-colors text-center font-medium",
-              filterMode === "ALL"
-                ? "bg-surface-0 text-fg shadow-sm border border-border/80"
-                : "text-fg-subtle hover:text-fg"
-            )}
-            title="Show all 30 monitoring stations (25 primary + 5 outside)"
-          >
-            All (30)
-          </button>
-          <button
-            onClick={() => onFilterChange("PRIMARY")}
-            className={cn(
-              "px-2.5 py-1 rounded transition-colors text-center font-medium",
-              filterMode === "PRIMARY"
-                ? "bg-surface-0 text-water shadow-sm border border-border/80"
-                : "text-fg-subtle hover:text-fg"
-            )}
-            title="Show 25 primary network stations and 24 edges"
-          >
-            Primary (25)
-          </button>
-          <button
-            onClick={() => onFilterChange("OUTSIDE")}
-            className={cn(
-              "px-2.5 py-1 rounded transition-colors text-center font-medium",
-              filterMode === "OUTSIDE"
-                ? "bg-surface-0 text-fg shadow-sm border border-border/80"
-                : "text-fg-subtle hover:text-fg"
-            )}
-            title="Show 5 outside/secondary monitoring stations"
-          >
-            Outside (5)
-          </button>
+          {(
+            [
+              { key: "ALL", label: "All" },
+              { key: "HEADWATERS", label: "Headwaters" },
+              { key: "MAINSTEM", label: "Mainstem" },
+              { key: "COLD_START", label: "Cold-Start" },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.key}
+              onClick={() => onFilterChange(item.key)}
+              className={cn(
+                "px-2 py-1 rounded transition-colors text-center font-medium text-[11px]",
+                filterMode === item.key
+                  ? "bg-surface-0 text-water shadow-sm border border-border/80"
+                  : "text-fg-subtle hover:text-fg"
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
       </div>
     </aside>
