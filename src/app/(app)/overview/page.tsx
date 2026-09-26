@@ -13,7 +13,7 @@ import { MetricLineChart, CHART_COLORS } from "@/components/charts/charts";
 import { StationPanel } from "@/features/stations/station-panel";
 import { PRODUCT, DATASET, SCORES } from "@/config/constants";
 import { fmtTime, fmtNumber } from "@/lib/format";
-import { STATIC_STATION_MAP } from "@/data/network-static";
+import { STATIC_STATION_MAP, getAncestors, getDescendants } from "@/data/network-static";
 import { cn } from "@/lib/utils";
 import type { SimEventType } from "@/types/domain";
 
@@ -65,16 +65,15 @@ export default function OverviewPage() {
     [stations]
   );
 
-  const highlight = useMemo(
-    () =>
-      network.data
-        ? {
-            upstream: network.data.ancestors[selected] ?? [],
-            downstream: network.data.descendants[selected] ?? [],
-          }
-        : undefined,
-    [network.data, selected]
-  );
+  const highlight = useMemo(() => {
+    if (!selected) return undefined;
+    const up = network.data?.ancestors?.[selected] ?? getAncestors(selected) ?? [];
+    const down = network.data?.descendants?.[selected] ?? getDescendants(selected) ?? [];
+    return {
+      upstream: up,
+      downstream: down,
+    };
+  }, [network.data, selected]);
 
   const handleStationClick = (id: string) => {
     selectStation(id);

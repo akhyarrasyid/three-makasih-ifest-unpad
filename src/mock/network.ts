@@ -5,6 +5,8 @@ import {
   getUpstream2Hop,
   getUpstream3Hop,
   getDownstreamPath,
+  getAncestors,
+  getDescendants,
 } from "@/data/network-static";
 import { basinHydrologyAt } from "./telemetry";
 import { clamp, round } from "@/lib/prng";
@@ -45,10 +47,19 @@ export function buildEdges(now: number): NetworkEdge[] {
 }
 
 export function buildNetwork(nodes: StationSnapshot[], now: number): NetworkGraph {
+  const ancestors: Record<string, string[]> = {};
+  const descendants: Record<string, string[]> = {};
+  for (const n of nodes) {
+    ancestors[n.station.id] = getAncestors(n.station.id);
+    descendants[n.station.id] = getDescendants(n.station.id);
+  }
+
   return {
     nodes,
     edges: buildEdges(now),
     riverPaths: [],
+    ancestors,
+    descendants,
   };
 }
 

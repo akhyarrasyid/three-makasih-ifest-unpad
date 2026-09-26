@@ -228,6 +228,8 @@ export interface NetworkGraph {
   nodes: StationSnapshot[];
   edges: NetworkEdge[];
   riverPaths: { id: string; name: string; points: [number, number][] }[];
+  ancestors?: Record<string, string[]>;
+  descendants?: Record<string, string[]>;
 }
 
 export interface Alert {
