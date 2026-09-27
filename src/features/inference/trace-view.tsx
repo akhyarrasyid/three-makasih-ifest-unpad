@@ -4,7 +4,7 @@ import { Chip, KV, StatusBadge } from "@/components/ui/primitives";
 import { fmtDateTime } from "@/lib/format";
 import { STATION_MAP } from "@/mock/stations";
 import { cn } from "@/lib/utils";
-import type { InferenceRequest } from "@/types/domain";
+import type { InferenceRequest, TraceSpan } from "@/types/domain";
 
 const SERVICE_COLOR: Record<string, string> = {
   "Feature Retrieval": "#388bfd",
@@ -21,20 +21,31 @@ const SERVICE_COLOR: Record<string, string> = {
 };
 
 export function TraceWaterfall({ request, showMeta = true }: { request: InferenceRequest; showMeta?: boolean }) {
-  const total = Math.max(1, request.spans.reduce((a, s) => a + s.durationMs, 0));
+  const rawSpans: TraceSpan[] = Array.isArray(request?.spans) && request.spans.length > 0
+    ? request.spans
+    : Array.isArray((request as any)?.trace)
+      ? (request as any).trace.map((t: any, idx: number): TraceSpan => ({
+          service: t.name || t.service || `Pipeline Step ${idx + 1}`,
+          durationMs: typeof t.durationMs === "number" ? t.durationMs : 10,
+          status: t.status === "OK" || t.status === "ok" ? "ok" : "error",
+          attributes: t.detail ? { detail: t.detail } : undefined,
+        }))
+      : [];
+
+  const total = Math.max(1, rawSpans.reduce((a: number, s: TraceSpan) => a + (s.durationMs || 0), 0));
 
   const spansWithOffset = useMemo(() => {
-    const offsets = request.spans.reduce<number[]>((acc, _, idx) => {
+    const offsets = rawSpans.reduce<number[]>((acc: number[], _: TraceSpan, idx: number) => {
       if (idx === 0) return [0];
-      return [...acc, acc[idx - 1] + request.spans[idx - 1].durationMs];
+      return [...acc, acc[idx - 1] + (rawSpans[idx - 1]?.durationMs || 0)];
     }, []);
 
-    return request.spans.map((s, idx) => ({
+    return rawSpans.map((s: TraceSpan, idx: number) => ({
       ...s,
       left: ((offsets[idx] ?? 0) / total) * 100,
-      width: Math.max(1.5, (s.durationMs / total) * 100),
+      width: Math.max(1.5, ((s.durationMs || 0) / total) * 100),
     }));
-  }, [request.spans, total]);
+  }, [rawSpans, total]);
 
   return (
     <div className="space-y-3 font-mono">
@@ -107,10 +118,10 @@ export function InferenceTrace({ request }: { request: InferenceRequest }) {
       <div className="rounded-md border border-border bg-surface-0 p-3">
         <div className="t-label mb-2">Inference routing sequence</div>
         <div className="flex flex-wrap items-center gap-1.5">
-          {request.route.map((r, i) => (
+          {(request.route ?? []).map((r, i) => (
             <span key={r} className="flex items-center gap-1.5">
-              <Chip tone={i === 0 ? "water" : i === request.route.length - 1 ? "ok" : "ai"}>{r}</Chip>
-              {i < request.route.length - 1 && <span className="text-fg-faint">→</span>}
+              <Chip tone={i === 0 ? "water" : i === (request.route?.length ?? 0) - 1 ? "ok" : "ai"}>{r}</Chip>
+              {i < (request.route?.length ?? 0) - 1 && <span className="text-fg-faint">→</span>}
             </span>
           ))}
         </div>

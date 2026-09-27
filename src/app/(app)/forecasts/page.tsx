@@ -32,7 +32,7 @@ function ForecastsInner() {
   const [trace, setTrace] = useState<InferenceRequest | null>(null);
 
   useEffect(() => {
-    const st = params.get("station");
+    const st = params.get("basin") || params.get("station");
     if (st && STATIC_STATION_MAP[st]) selectStation(st);
   }, [params, selectStation]);
 
@@ -320,7 +320,7 @@ function ForecastsInner() {
         subtitle="End-to-end transformation from raw water budget to directed reachability and continuous probability"
       >
         {forecast.data ? (
-          <RoutingDiagram steps={forecast.data.routing} horizontal />
+          <RoutingDiagram steps={forecast.data.routing ?? []} horizontal />
         ) : (
           <ChartSkeleton height={120} />
         )}

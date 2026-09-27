@@ -550,34 +550,22 @@ export async function experiments() {
 export async function runForecast(stationId: string, tick = 0, _actor = "operator", _role = "operator") {
   const now = simNow(tick);
   const snap = await stationDetail(stationId, tick);
+  const baseReq = buildInferenceRequest(stationId, Date.now(), `fc_${tick}`, true);
   return {
     stationId,
     timestamp: now,
     status: "SUCCESS",
-    latencyMs: 183,
+    latencyMs: baseReq.latencyMs,
     snapshot: snap,
     provenance: "SIMULATED DEMO TELEMETRY",
     request: {
+      ...baseReq,
       requestId: `req_${Date.now()}`,
-      timestamp: now,
       stationId,
+      basinId: stationId,
       modelVersion: MODEL.productionVersion,
-      route: ["API Request", "Feature Retrieval", "Hydrology Processing", "Directed GNN", "GBDT Inference", "Risk Interpretation"],
-      latencyMs: 183,
-      featureCount: 88,
-      confidence: snap?.confidence.score ?? 0.86,
+      confidence: snap?.confidence?.score ?? 0.86,
       status: "SUCCESS" as const,
-      trace: [
-        { name: "Feature Retrieval", durationMs: 18, status: "OK", detail: "88 tabular features fetched" },
-        { name: "Hydrology Processing", durationMs: 31, status: "OK", detail: "Baseflow & quickflow filtered" },
-        { name: "Temporal Context", durationMs: 12, status: "OK", detail: "14-year climatology aligned" },
-        { name: "Reachability Lookup", durationMs: 14, status: "OK", detail: "3-hop DAG neighborhood retrieved" },
-        { name: "CatBoost Inference", durationMs: 26, status: "OK", detail: "Primary nonlinear booster" },
-        { name: "LightGBM Inference", durationMs: 18, status: "OK", detail: "Leaf-wise ensemble component" },
-        { name: "XGBoost Inference", durationMs: 22, status: "OK", detail: "Depth-wise regularized model" },
-        { name: "Directed GNN Inference", durationMs: 44, status: "OK", detail: "3 reachability layers evaluated" },
-        { name: "Risk Fusion & Calibration", durationMs: 4, status: "OK", detail: "Dirichlet blend calibrated" },
-      ],
     },
   };
 }

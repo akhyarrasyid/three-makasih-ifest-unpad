@@ -120,11 +120,19 @@ export function ConfidencePanel({ confidence, compact }: { confidence: ForecastC
   );
 }
 
-export function RoutingDiagram({ steps, horizontal }: { steps: RoutingStep[]; horizontal?: boolean }) {
-  const total = steps.reduce((a, s) => a + s.durationMs, 0);
+export function RoutingDiagram({ steps = [], horizontal }: { steps?: RoutingStep[]; horizontal?: boolean }) {
+  const safeSteps = Array.isArray(steps) ? steps : [];
+  const total = safeSteps.reduce((a, s) => a + (s.durationMs || 0), 0);
+  if (safeSteps.length === 0) {
+    return (
+      <div className="text-xs text-fg-subtle font-mono p-3 bg-surface-1 rounded border border-border">
+        Hydrological routing pipeline steps calibrated for this basin.
+      </div>
+    );
+  }
   return (
     <div className={cn("flex gap-1.5 font-mono", horizontal ? "flex-row flex-wrap items-stretch" : "flex-col")}>
-      {steps.map((s, i) => (
+      {safeSteps.map((s, i) => (
         <div key={s.id} className={cn("flex", horizontal ? "items-center gap-1.5" : "flex-col gap-1.5")}>
           <div className="rounded border px-2.5 py-1.5 min-w-[150px] bg-surface-1 border-border">
             <div className="flex items-center justify-between gap-2">
@@ -133,7 +141,7 @@ export function RoutingDiagram({ steps, horizontal }: { steps: RoutingStep[]; ho
             </div>
             <div className="t-caption mt-0.5 !text-[10px] text-fg-subtle">{s.detail}</div>
           </div>
-          {i < steps.length - 1 && (
+          {i < safeSteps.length - 1 && (
             <div className={cn("flex items-center justify-center text-fg-faint", horizontal ? "" : "h-2.5 pl-3")}>
               {horizontal ? <ArrowRight className="h-3 w-3" /> : <span className="block h-full w-px bg-border" />}
             </div>
