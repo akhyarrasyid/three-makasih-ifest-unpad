@@ -37,7 +37,8 @@ export default function WaterAvailabilityPage() {
 
   // Monthly 12-month budget progression
   const monthlyBudget = useMemo(() => {
-    return (history.data?.points ?? []).map((p) => ({
+    const pts = Array.isArray(history.data?.points) ? history.data.points : [];
+    return pts.map((p) => ({
       month: p.monthName ?? new Date(p.t).toLocaleDateString("en-US", { month: "short" }),
       supply: p.supply,
       withdrawal: p.withdrawal,

@@ -4,7 +4,8 @@ import Link from "next/link";
 import { ArrowRight, Droplets, AlertTriangle, ShieldCheck, GitFork, Compass, Layers, CheckCircle2 } from "lucide-react";
 import { useOverview, useNetwork } from "@/hooks/use-api";
 import { useSelectionStore } from "@/store/selection-store";
-import { WatershedMap } from "@/components/map/watershed-map";
+import { NetworkMap } from "@/components/network/network-map";
+import { DEFAULT_NETWORK_LAYERS } from "@/components/network/network-types";
 import {
   ErrorState, Skeleton, Drawer, TrendIcon, ChartSkeleton,
   RiskBadge
@@ -218,19 +219,17 @@ export default function OverviewPage() {
             </div>
           </div>
 
-          <div className="h-[440px] md:h-[500px] w-full relative">
+          <div className="h-[440px] md:h-[500px] w-full relative overflow-hidden bg-surface-0 rounded-none">
             {network.data ? (
-              <WatershedMap
+              <NetworkMap
                 nodes={network.data.nodes}
-                edges={network.data.edges}
-                riverPaths={network.data.riverPaths}
                 selectedId={selected}
                 onSelect={handleStationClick}
-                hoveredId={hover}
-                onHover={setHover}
-                highlight={highlight}
-                layers={{ rainfall: true }}
-                className="rounded-none"
+                filterMode="ALL"
+                layers={DEFAULT_NETWORK_LAYERS}
+                ancestorIds={highlight?.upstream}
+                descendantIds={highlight?.downstream}
+                className="h-full w-full"
               />
             ) : (
               <Skeleton className="h-full w-full rounded-none" />

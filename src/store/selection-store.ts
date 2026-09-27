@@ -18,13 +18,13 @@ interface SelectionState {
 }
 
 export const useSelectionStore = create<SelectionState>()((set) => ({
-  selectedStationId: "BS-008",
+  selectedStationId: "HUC-DEMO-0001",
   compareStationId: null,
   timeRangeHours: 72,
   horizon: 24,
   mapLayers: { rivers: true, stations: true, dams: true, risk: true, flow: true, gradient: false, correlation: false, rainfall: true },
   mapMode: "map",
-  selectStation: (id) => set({ selectedStationId: id }),
+  selectStation: (id) => set({ selectedStationId: id || "HUC-DEMO-0001" }),
   setCompare: (id) => set({ compareStationId: id }),
   setTimeRange: (h) => set({ timeRangeHours: h }),
   setHorizon: (h) => set({ horizon: h }),

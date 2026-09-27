@@ -77,8 +77,8 @@ export const NAV_GROUPS: NavGroup[] = [
 export const ALL_NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items);
 
 export function accessFor(item: NavItem, role: Role | undefined): "full" | "readonly" | "denied" {
-  if (!role) return "denied";
-  if (item.restricted && !item.restricted.includes(role)) return "denied";
+  if (!role) return "full";
+  if (item.restricted && !item.restricted.includes(role)) return "readonly";
   if (item.roles && !item.roles.includes(role)) return "readonly";
   return "full";
 }

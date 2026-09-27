@@ -296,28 +296,33 @@ export async function listStationSnapshots(tick = 0): Promise<StationSnapshot[]>
 
 export const getStations = listStationSnapshots;
 
+function resolveStation(id: string) {
+  return STATION_MAP[id] ?? STATIONS.find((s) => s.code === id) ?? STATIONS[0];
+}
+
 export async function stationDetail(id: string, tick = 0): Promise<StationDetail | null> {
   const now = simNow(tick);
-  const station = STATION_MAP[id];
+  const station = resolveStation(id);
   if (!station) return null;
+  const validId = station.id;
 
   const snap = stationSnapshot(station, now);
-  const fc = forecastSeries(id, now, 6);
-  const conf = forecastConfidence(id, now, fc);
-  const reach = reachabilityTrace(id, now);
+  const fc = forecastSeries(validId, now, 6);
+  const conf = forecastConfidence(validId, now, fc);
+  const reach = reachabilityTrace(validId, now);
   const steps = routingSteps(station);
 
   return {
     ...snap,
     confidence: conf,
     reachability: reach,
-    residualCorrelations: neighbours(id, 6),
+    residualCorrelations: neighbours(validId, 6),
     rainfallCorrelation: [
       { lagHours: 1, correlation: 0.78 },
       { lagHours: 2, correlation: 0.84 },
       { lagHours: 3, correlation: 0.72 },
     ],
-    inferenceHistory: recentInferenceRequests(now, 8).filter((r) => r.stationId === id),
+    inferenceHistory: recentInferenceRequests(now, 8).filter((r) => r.stationId === validId),
     routing: steps,
   };
 }
@@ -326,14 +331,15 @@ export const getStationDetail = stationDetail;
 
 export async function stationForecast(id: string, tick = 0, _anchorOffset = 0) {
   const now = simNow(tick);
-  const station = STATION_MAP[id] ?? STATIONS[0];
-  const points = forecastWithActuals(id, now - MONTH_MS, now, 6);
-  const conf = forecastConfidence(id, now, points);
-  const hydro = basinHydrologyAt(id, now);
-  const hydroNext = basinHydrologyAt(id, now + MONTH_MS);
+  const station = resolveStation(id);
+  const validId = station.id;
+  const points = forecastWithActuals(validId, now - MONTH_MS, now, 6);
+  const conf = forecastConfidence(validId, now, points);
+  const hydro = basinHydrologyAt(validId, now);
+  const hydroNext = basinHydrologyAt(validId, now + MONTH_MS);
 
   return {
-    stationId: id,
+    stationId: validId,
     anchor: now - MONTH_MS,
     now,
     modelVersion: station.graphDepth > 3 ? "tirta-directed-gnn-v1" : "tirta-graph-catboost-v1",
@@ -352,7 +358,7 @@ export const getStationForecast = stationForecast;
 
 export async function stationHistory(id: string, tick = 0, _months = 18, _step = 1) {
   const now = simNow(tick);
-  const station = STATION_MAP[id] ?? STATIONS[0];
+  const station = resolveStation(id);
   return sampleHistory(station, now, 18);
 }
 

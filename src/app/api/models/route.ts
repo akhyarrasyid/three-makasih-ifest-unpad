@@ -6,9 +6,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   return handle(async () => {
-    const versions = await models();
+    const m = await models();
     return ok({
-      versions,
+      versions: m.versions,
+      experiments: m.experiments,
       benchmarks: BENCHMARKS,
       ablations: ABLATIONS,
       folds: FOLDS,

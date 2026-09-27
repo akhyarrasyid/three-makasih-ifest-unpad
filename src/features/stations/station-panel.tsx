@@ -17,7 +17,8 @@ export function mergeSeries(
   anchor?: number
 ): TsPoint[] {
   const out: TsPoint[] = [];
-  for (const h of history ?? []) {
+  const hist = Array.isArray(history) ? history : [];
+  for (const h of hist) {
     out.push({
       t: h.t,
       actual: h.quality === "OUTLIER" ? null : h.supply,
@@ -25,18 +26,19 @@ export function mergeSeries(
       quality: h.quality,
     });
   }
-  if (forecast?.length) {
-    const last = history?.length ? history[history.length - 1] : undefined;
+  const fc = Array.isArray(forecast) ? forecast : [];
+  if (fc.length) {
+    const last = hist.length ? hist[hist.length - 1] : undefined;
     if (last && last.supply !== null) {
       out.push({
         t: last.t,
         actual: last.supply,
         forecast: last.supply,
         band: [last.supply, last.supply],
-        climatology: forecast[0].climatology,
+        climatology: fc[0].climatology,
       });
     }
-    for (const f of forecast) {
+    for (const f of fc) {
       out.push({
         t: f.t,
         forecast: f.predicted * 100, // scaled for visualization
@@ -54,15 +56,16 @@ export function mergeSeries(
 
 export function gapsFrom(history: TelemetryPoint[] | undefined) {
   const gaps: { from: number; to: number }[] = [];
+  const hist = Array.isArray(history) ? history : [];
   let start: number | null = null;
-  for (const p of history ?? []) {
+  for (const p of hist) {
     if (p.quality === "MISSING" && start === null) start = p.t;
     if (p.quality !== "MISSING" && start !== null) {
       gaps.push({ from: start, to: p.t });
       start = null;
     }
   }
-  if (start !== null && history?.length) gaps.push({ from: start, to: history[history.length - 1].t });
+  if (start !== null && hist.length) gaps.push({ from: start, to: hist[hist.length - 1].t });
   return gaps;
 }
 
