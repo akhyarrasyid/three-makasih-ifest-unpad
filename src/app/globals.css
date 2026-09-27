@@ -508,3 +508,10 @@ select.input {
 .maplibregl-ctrl-attrib a {
   color: var(--color-fg-muted) !important;
 }
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: -296;
+  }
+}
+
